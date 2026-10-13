@@ -27,6 +27,7 @@ use tauri_plugin_autostart::ManagerExt as _;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
 
 use crate::{
+    caps,
     state::{AppState, Hotkeys, Notice},
     windows::{self, MAIN, OVERLAY},
 };
@@ -149,7 +150,9 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     home.ensure()?;
     let (config, startup_notice) = load_config(&home);
     let db = Database::open(&home.database_file(), &home.backups_dir())?;
-    db.device_id(&config.current().core.device_name)?;
+    let device_id = db.device_id(&config.current().core.device_name)?;
+    let builtin_root = caps::find_builtin_root(app.handle());
+    let registry = caps::initial_registry(builtin_root.as_deref(), &home.capabilities_dir());
     let engine = build_engine(config.current(), &home);
     let themes = load_themes(&home);
 
@@ -164,13 +167,23 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         notices: Mutex::new(Vec::new()),
         started: Instant::now(),
         summon_started: Mutex::new(None),
+        registry: Mutex::new(registry),
+        pending_calls: Mutex::new(std::collections::HashMap::new()),
+        next_call: std::sync::atomic::AtomicU64::new(1),
+        badges: Mutex::new(std::collections::HashMap::new()),
+        builtin_root,
+        device_id,
     });
 
     let handle = app.handle().clone();
     windows::create_overlay(&handle)?;
+    windows::create_logic(&handle)?;
     install_reactions(&handle);
     build_tray(&handle)?;
     apply_config(&handle);
+    caps::apply_enabled_list(&handle);
+    caps::emit_capabilities(&handle);
+    caps::spawn_scheduler(handle.clone());
     if let Some(message) = startup_notice {
         set_notices(&handle, "startup", vec![message]);
     }
@@ -199,6 +212,7 @@ fn install_reactions(app: &AppHandle) {
     let handle = app.clone();
     let bus = app.state::<AppState>().bus.clone();
     bus.subscribe("*", move |event| {
+        caps::forward_event(&handle, event);
         let state = handle.state::<AppState>();
         let now = state.now_ms();
         let decision = state.engine.lock().unwrap().handle(event, now);
@@ -302,8 +316,27 @@ fn spawn_config_watcher(app: AppHandle) {
         let path = app.state::<AppState>().home.config_file();
         let modified = |p: &std::path::Path| fs::metadata(p).and_then(|m| m.modified()).ok();
         let mut last = modified(&path);
+        let cap_dir = app.state::<AppState>().home.capability_config_dir();
+        let mut cap_files: std::collections::HashMap<std::path::PathBuf, std::time::SystemTime> =
+            std::collections::HashMap::new();
         loop {
             thread::sleep(Duration::from_millis(500));
+
+            // Hand edits to a capability's settings file reach its logic.
+            if let Ok(entries) = fs::read_dir(&cap_dir) {
+                for path in entries.filter_map(Result::ok).map(|e| e.path()) {
+                    let Some(mtime) = modified(&path) else {
+                        continue;
+                    };
+                    let known = cap_files.insert(path.clone(), mtime);
+                    if known.is_some_and(|k| k != mtime)
+                        && let Some(id) = path.file_stem().and_then(|s| s.to_str())
+                    {
+                        caps::notify_settings_changed(&app, id);
+                    }
+                }
+            }
+
             let now = modified(&path);
             if now == last {
                 continue;

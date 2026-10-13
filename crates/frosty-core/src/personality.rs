@@ -242,6 +242,12 @@ impl PersonalityEngine {
         }
     }
 
+    /// Adds a capability's phrases to the loaded packs; an existing key is
+    /// replaced.
+    pub fn merge_microcopy(&mut self, pack: Microcopy) {
+        self.microcopy.merge(pack);
+    }
+
     pub fn set_tone(&mut self, tone: Tone) {
         self.tone = tone;
     }

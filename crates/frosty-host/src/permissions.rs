@@ -14,6 +14,14 @@ pub struct PermissionLine {
     pub sensitive: bool,
 }
 
+/// Reads a `[capabilities.permissions.<id>]` table from `frosty.toml`.
+/// Anything missing or malformed counts as not granted.
+pub fn from_table(table: Option<&toml::Table>) -> Permissions {
+    table
+        .and_then(|t| toml::Value::Table(t.clone()).try_into::<Permissions>().ok())
+        .unwrap_or_default()
+}
+
 /// What the capability asks for, as sentences a person can judge.
 pub fn describe(p: &Permissions) -> Vec<PermissionLine> {
     let mut lines = Vec::new();
@@ -134,6 +142,20 @@ mod tests {
             ]
         );
         assert!(lines.iter().all(|l| !l.sensitive));
+    }
+
+    #[test]
+    fn grants_read_back_from_config_tables() {
+        let table: toml::Table = toml::from_str(
+            "storage = true
+network = [\"a.example\"]
+",
+        )
+        .unwrap();
+        let p = from_table(Some(&table));
+        assert!(p.storage && !p.shell);
+        assert_eq!(p.network, vec!["a.example"]);
+        assert_eq!(from_table(None), Permissions::default());
     }
 
     #[test]

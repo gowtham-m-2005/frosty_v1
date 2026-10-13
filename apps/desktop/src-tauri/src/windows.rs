@@ -10,6 +10,8 @@ use tauri::{
 
 pub const OVERLAY: &str = "overlay";
 pub const MAIN: &str = "main";
+/// The hidden webview that runs every capability's logic (docs/PROJECT_SPEC.md 8.10).
+pub const LOGIC: &str = "logic";
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub struct HitRect {
@@ -33,6 +35,19 @@ pub fn create_overlay(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     .skip_taskbar(true)
     .resizable(false)
     .visible(false)
+    .focused(false)
+    .build()
+}
+
+pub fn create_logic(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    WebviewWindowBuilder::new(
+        app,
+        LOGIC,
+        WebviewUrl::App("index.html?window=logic".into()),
+    )
+    .title("Frosty logic host")
+    .visible(false)
+    .skip_taskbar(true)
     .focused(false)
     .build()
 }

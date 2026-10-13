@@ -1,5 +1,7 @@
 use std::{
-    sync::{Arc, Mutex},
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex, atomic::AtomicU64},
     time::Instant,
 };
 
@@ -7,8 +9,10 @@ use frosty_core::{
     config::ConfigStore, db::Database, events::EventBus, home::FrostyHome,
     personality::PersonalityEngine, theme::Theme,
 };
+use frosty_host::registry::Registry;
 use serde::Serialize;
 use tauri_plugin_global_shortcut::Shortcut;
+use tokio::sync::oneshot;
 
 #[derive(Default)]
 pub struct Hotkeys {
@@ -38,6 +42,13 @@ pub struct AppState {
     pub started: Instant,
     /// Set when a summon begins; read by `summon_painted` to measure latency.
     pub summon_started: Mutex<Option<Instant>>,
+    pub registry: Mutex<Registry>,
+    /// Tool calls waiting for the logic host's answer, by call id.
+    pub pending_calls: Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>,
+    pub next_call: AtomicU64,
+    pub badges: Mutex<HashMap<String, i64>>,
+    pub builtin_root: Option<PathBuf>,
+    pub device_id: String,
 }
 
 impl AppState {

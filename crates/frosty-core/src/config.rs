@@ -297,10 +297,17 @@ fn json_to_toml(value: &serde_json::Value) -> Result<Value, ConfigError> {
             }
             Value::from(array)
         }
-        other => {
-            return Err(ConfigError::Edit(format!(
-                "unsupported value {other}, expected a string, number, boolean, or list"
-            )));
+        J::Object(map) => {
+            let mut table = toml_edit::InlineTable::new();
+            for (k, v) in map {
+                table.insert(k, json_to_toml(v)?);
+            }
+            Value::from(table)
+        }
+        J::Null => {
+            return Err(ConfigError::Edit(
+                "null cannot be stored; remove the key instead".into(),
+            ));
         }
     })
 }

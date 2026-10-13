@@ -1,3 +1,4 @@
+mod caps;
 mod commands;
 mod shell;
 mod state;
@@ -20,6 +21,10 @@ pub fn run() {
                 .with_handler(shell::on_shortcut)
                 .build(),
         )
+        .plugin(tauri_plugin_dialog::init())
+        .register_uri_scheme_protocol("frosty-cap", |ctx, request| {
+            caps::serve(ctx.app_handle(), request.uri().path())
+        })
         .setup(shell::setup)
         .on_window_event(|window, event| {
             // Closing the main window returns to compact mode instead of
@@ -54,6 +59,26 @@ pub fn run() {
             commands::save_fox_position,
             commands::get_paths,
             commands::reveal,
+            caps::list_capabilities,
+            caps::enable_capability,
+            caps::disable_capability,
+            caps::capability_activated,
+            caps::capability_failed,
+            caps::rescan_capabilities,
+            caps::remove_capability,
+            caps::install_capability_from_folder,
+            caps::capability_reveal,
+            caps::get_capability_schema,
+            caps::get_capability_settings,
+            caps::set_capability_settings,
+            caps::call_tool,
+            caps::tool_result,
+            caps::cap_db,
+            caps::cap_emit,
+            caps::cap_schedule,
+            caps::cap_notify,
+            caps::cap_badge,
+            caps::cap_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
