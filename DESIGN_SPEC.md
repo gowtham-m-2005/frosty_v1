@@ -1,7 +1,7 @@
 # Frosty: Design Spec (Frontend)
 
-Status: Draft v0.4 (adds pixel theme direction and layout answers)
-Date: 2026-10-13
+Status: Draft v0.5 (Windows 11 only for now, skin contract additions)
+Date: 2026-10-14
 Companion doc: PROJECT_SPEC.md (architecture)
 
 This document covers what Frosty looks like, how it moves, how it behaves on screen, and how capability UIs must fit into it. Dimensions and colors are starting values to be tuned once real art and a running build exist.
@@ -97,6 +97,8 @@ Note: this contract is written for Rive. If the fox becomes pixel art, an equiva
 | `sleepy` | boolean | Sleepy state on or off |
 | `oops` | trigger | Play oops |
 | `thinking` | boolean | Thinking loop on or off |
+| `bye` | trigger | Play bye |
+| `mini` | boolean | Rail size on or off. Turning it on plays `mode_expand`, turning it off plays `mode_collapse`. |
 | `intensity` | number 0 to 1 | Scales the current reaction |
 | `lookX`, `lookY` | number -1 to 1 | Optional eye or head follow of the pointer |
 
@@ -344,7 +346,7 @@ Every capability UI follows this so the whole app feels like one thing. The shel
 7. Emit events for meaningful user actions so reactions can fire. Do not play character animations directly.
 8. Destructive actions need a confirm step or an undo toast.
 9. Strings go through the microcopy and i18n system so tone and Tamil locale can be added later.
-10. The UI is always TypeScript and React, whatever language the capability's logic uses. UI code talks to its logic only through tools and events, never through shared in-memory state, so the logic can later move into another process without changing the UI.
+10. The UI is always TypeScript and React, whatever language the capability's logic uses. UI code talks to its logic only through tools and events, never through shared in-memory state, so the logic can later move into another process without changing the UI. This already holds in v1: views and logic run in separate webviews (PROJECT_SPEC.md section 8.10), and a dock badge is a value the logic pushes, not a function the view calls.
 11. Handle a backend that is slow or not running: show a loading state, then a clear "backend not running" error state with a Restart action. Never freeze the card.
 
 ## 8. Reactions and character behavior
@@ -633,7 +635,7 @@ These defaults are placeholders. The first run and the settings UI both test for
 - The module card opens beside the fox, not perched on it.
 - Themes are files. The direction is flat solid colors with a pixel or retro game feel, avoiding gradients, glow, and a generic AI-generated look (section 13).
 - Surfaces use subtle blur where supported, with a solid fallback. A theme can set its own surface style, and pixel themes default to solid.
-- Platform: Windows 10 and Windows 11 are both supported. Android later. No iOS.
+- Platform: Windows 11 only for now. Windows 10 is not a target. Android later. No iOS.
 - Tone is a manual setting for v1. Mirror mode is deferred.
 - Capability logic is TypeScript first and Python backends come later, so capability UIs must stay backend-agnostic (section 7.2, rules 10 and 11).
 - Reminders wait in history while a fullscreen app is in front.

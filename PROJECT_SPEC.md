@@ -1,7 +1,7 @@
 # Frosty: Project Spec (Architecture)
 
-Status: Draft v0.4 (adds review answers on platform, themes, and data)
-Date: 2026-10-13
+Status: Draft v0.5 (Windows 11 only for now, plus fixes from the implementation plan review)
+Date: 2026-10-14
 Owner: Gowtham
 Companion doc: DESIGN_SPEC.md (frontend and visual design)
 
@@ -110,7 +110,7 @@ Every service lives in Rust, is unit-testable without the UI, and exposes a narr
 
 ### 7.1 Config service
 
-- Loads and validates `frosty.toml` and each `capabilities/<id>/config.toml`.
+- Loads and validates `frosty.toml` and each `capability-config/<id>.toml`.
 - Watches files. When a file changes on disk, validates it and hot-reloads. If invalid, keeps the last good config and surfaces an error with line and column.
 - UI edits go through the same service and write back using `toml_edit` so user comments and formatting survive.
 - Every config has a `config_version` and a migration path.
@@ -194,7 +194,7 @@ Mirror mode ("casual back when you are casual") is parked. It is not needed now,
 
 ### 7.9 Capability host
 
-- Discovers capabilities in the capabilities folder, validates manifests, checks `api_version` compatibility, and tracks state (`discovered`, `disabled`, `enabled`, `error`).
+- Discovers capabilities in two roots (the app bundle for built-ins and `<frosty-home>/capabilities` for user capabilities, see 8.8), validates manifests, checks `api_version` compatibility, and tracks state (`discovered`, `disabled`, `enabled`, `error`).
 - Handles activate and deactivate lifecycle, permission grants, and isolation of failures.
 - Talks to a capability's logic through a runtime adapter. v1 has exactly one adapter (TypeScript running in the app). A Python adapter can be added later without changing the host's public behavior (see 8.9).
 - Details in section 8.
@@ -210,9 +210,13 @@ capabilities/
     settings.schema.json   settings declared as JSON Schema
     migrations/            SQL migrations for this capability
     microcopy/en.json      tone packs for this capability
-    dist/index.js          compiled entry (exports defineCapability)
+    schemas/               JSON Schemas for tool input and output and event payloads
+    dist/index.js          compiled logic entry (exports defineCapability)
+    dist/views.js          compiled views entry (exports defineViews)
     assets/icon.svg
 ```
+
+The capability's settings values are not stored in this folder. They live in `<frosty-home>/capability-config/<id>.toml` (see 9.1), because built-in capability folders sit in the read-only app bundle.
 
 ### 8.1 Manifest (capability.toml)
 
@@ -224,7 +228,8 @@ version = "0.1.0"
 api_version = "1"
 runtime = "ts"          # "ts" in v1, "python" later (see 8.9)
 description = "Tasks and reminders"
-entry = "dist/index.js"
+entry = "dist/index.js"   # logic, loaded in the logic host
+views = "dist/views.js"   # views, loaded in the overlay and main windows
 icon = "assets/icon.svg"
 
 [permissions]
@@ -246,7 +251,10 @@ schema = "settings.schema.json"
 [[tools]]
 id = "tasks.add"
 title = "Add task"
+input_schema = "schemas/tasks.add.input.json"
+output_schema = "schemas/tasks.add.output.json"
 quick_action = true
+quick_action_control = "text"   # stepper | text | toggle | button
 
 [[events]]
 id = "tasks.completed"
@@ -255,11 +263,17 @@ payload_schema = "schemas/tasks.completed.json"
 [[reactions]]
 on = "tasks.completed"
 animation = "celebrate"
-intensity = "small"
+intensity = "small"             # a number from 0 to 1, or a named level
 microcopy = "tasks.completed"
 ```
 
+Reaction intensity accepts a number from 0 to 1 or a named level: `small` is 0.3, `medium` is 0.5, `large` is 0.8.
+
 ### 8.2 SDK shape
+
+A capability has two entries. Logic and views run in different JavaScript contexts (see 8.10), so they are separate modules and never share in-memory state.
+
+Logic entry (`dist/index.js`), loaded once in the logic host:
 
 ```ts
 import { defineCapability } from "@frosty/sdk";
@@ -268,18 +282,12 @@ export default defineCapability({
   id: "tasks",
 
   async onActivate(ctx) {
-    // tools
     ctx.tools.register("tasks.add", async ({ title, due }) => {
       const id = await ctx.db.insert("tasks", { title, due });
       await ctx.events.emit("tasks.created", { id });
+      await ctx.views.setBadge(await openCount(ctx));
       return { id };
     });
-
-    // views
-    ctx.views.register({ slot: "card", component: TasksCard });
-    ctx.views.register({ slot: "page", component: TasksPage });
-    ctx.views.register({ slot: "widget", component: TodayWidget });
-    ctx.views.register({ slot: "dock", icon: "assets/icon.svg", badge: () => openCount() });
   },
 
   async onDeactivate(ctx) {
@@ -288,7 +296,24 @@ export default defineCapability({
 });
 ```
 
+Views entry (`dist/views.js`), loaded in the overlay and main windows:
+
+```ts
+import { defineViews } from "@frosty/sdk/views";
+
+export default defineViews({
+  dock: { icon: "assets/icon.svg" },
+  card: TasksCard,
+  page: TasksPage,
+  widget: TodayWidget,
+});
+```
+
+View components get no `ctx`. They reach their logic through client hooks (`useTool`, `useEvent`, `useQuery`), which call tools and listen to events through the core. A dock badge is a value the logic pushes with `ctx.views.setBadge(n)`, not a function the shell calls.
+
 The `ctx` object exposes only what the manifest permissions allow: `ctx.db`, `ctx.events`, `ctx.tools`, `ctx.views`, `ctx.scheduler`, `ctx.notify`, `ctx.config`, `ctx.log`, and gated `ctx.host.*` (clipboard, fs, shell, network).
+
+`ctx.db` is a structured API (`insert`, `update`, `softDelete`, `get`, `query` with filters). The core adds the `cap_<id>_` table prefix and fills the sync columns itself. No raw SQL crosses the bridge in v1.
 
 Design rule: every `ctx` call is async (returns a promise), even though the v1 implementation runs in the same process. This keeps the API valid if a capability's logic later runs in another process (see 8.9).
 
@@ -318,27 +343,31 @@ Views are React components rendered by the shell using shared UI components and 
 
 ### 8.5 Tools
 
-- A tool has an id, a title, a JSON Schema for input and output, and an optional `quick_action` flag.
+- A tool has an id, a title, a JSON Schema for input and output (`input_schema` and `output_schema` in the manifest), and an optional `quick_action` flag with a `quick_action_control` that says which inline control the dock shows.
+- Every tool call is routed through the Rust core, which validates the input and checks permissions before the logic host runs the handler.
 - Callers: dock quick actions, hotkeys, other capabilities (needs a `tools.call:<id>` permission), later an automation layer.
 - Tools are the unit that makes a capability scriptable without giving others direct access to its internals.
 
 ### 8.6 Permissions
 
-- Declared in the manifest, granted by the user at enable time, stored in `frosty.toml`.
-- Enforced in the Rust host, not just in the SDK. A capability cannot reach the filesystem, shell, clipboard, or network without a grant.
+- Declared in the manifest, granted by the user at enable time, stored in `frosty.toml`. `frosty.toml` is the only place grants and the enabled list are stored.
+- Enforced in the Rust host, not just in the SDK. Every `ctx` call is a core command that carries the capability id, and the core checks the grant before acting. A capability cannot reach the filesystem, shell, clipboard, or network without a grant.
+- Network: the webviews run under a content security policy that blocks direct network requests. The only network path is `ctx.host.network.fetch`, which the Rust core performs against the manifest's host allowlist.
+- In v1 the capability id on a call is asserted by the SDK, which is acceptable under the trust model below.
 - v1 trust model: capabilities are trusted local code (you wrote them or you chose to install them). Permissions are a safety net and a clarity tool. Real sandboxing of untrusted third-party code (running in an isolated iframe or WASM) is a later phase and the SDK is designed so that move does not break the API.
 
 ### 8.7 Settings
 
 - Capabilities declare settings as JSON Schema with UI hints (`x-frosty-widget`, labels, descriptions, grouping).
-- The shell renders the form, validates input, and writes `capabilities/<id>/config.toml`.
+- The shell renders the form, validates input, and writes `capability-config/<id>.toml`.
 - Editing the TOML by hand has the same effect and hot-reloads.
 - Supported field types in v1: toggle, text, number, select, multi-select, time, date, color, path picker, list editor, keybinding recorder.
 
 ### 8.8 Built-in vs installed
 
 - Built-in capabilities ship in the app bundle but live in the same format and load through the same host.
-- User capabilities are installed by dropping a folder into the capabilities directory or using "Install from folder" in the module manager.
+- User capabilities are installed by dropping a folder into `<frosty-home>/capabilities` or using "Install from folder" in the module manager.
+- The host scans both roots. A user capability whose id matches a built-in is rejected with a clear error.
 - A built-in can be disabled but not deleted.
 
 ### 8.9 Capability languages and runtime plan
@@ -386,6 +415,23 @@ A capability you actually want needs a Python library with no decent TypeScript 
 - **Mixed capabilities:** not everything moves. Tasks, calendar, and notes can stay pure TypeScript indefinitely, and both kinds coexist.
 - **Trust:** a Python process can do whatever the OS allows, so permissions gate what it may ask Frosty for, not what the process itself can do. The trust model stays "install only code you trust", and the permission sheet says so plainly for Python capabilities (DESIGN_SPEC.md section 4.3).
 - **Packaging:** bundle a Python runtime in the Windows installer, or require one on the machine. For personal use, relying on your own Python install is fine at first.
+
+### 8.10 Where capability code runs
+
+The app has two visible windows, each with its own webview and JavaScript context, and capability logic must also run when both are hidden (a scheduler job can fire a tool call at any time). So the app has three webviews in one WebView2 browser process:
+
+| Webview | Visible | Runs |
+|---------|---------|------|
+| Logic host | Never | Each enabled capability's logic entry: `onActivate`, tool handlers, event subscriptions |
+| Overlay | Compact mode | Fox, dock, card, speech chip, quick actions, and capability views |
+| Main | Fullscreen mode | Rail, home, pages, settings, module manager, and capability views |
+
+- A tool call goes from a view to the Rust core to the logic host and back.
+- Switching modes never reloads capability state, because state lives in the core and the logic host, not in either visible window.
+- The logic host is the v1 runtime adapter (see 7.9). A Python backend later is a second adapter behind the same interface.
+- Capability bundles are ES modules served through a custom URI scheme that reads only from the two discovery roots. `react`, `react-dom`, `@frosty/sdk`, and `@frosty/ui` are supplied by the shell, so every capability shares one React instance and one set of design tokens.
+
+This model is verified by Phase 0 Spike D. If a hidden webview turns out to be unreliable, the fallback is to run logic in the main window's webview and only ever hide that window, never close it.
 
 ## 9. Configuration
 
@@ -471,7 +517,7 @@ notifications = true
 | Table | Purpose |
 |-------|---------|
 | `device` | This device's id and name |
-| `capability_state` | Enabled flag, granted permissions, installed version, last error |
+| `capability_state` | Runtime facts only: installed version, current state, last error, error count. The enabled list and granted permissions live in `frosty.toml`. |
 | `kv` | Core key-value (window positions, onboarding state) |
 | `scheduler_jobs` | Persistent jobs |
 | `notifications` | Notification history |
@@ -514,9 +560,9 @@ The reaction then passes through cooldown, reaction level, and tone selection be
 
 ### 12.1 Desktop (Windows first)
 
-Windows is the only v1 target, and both Windows 10 and Windows 11 must work. Everything in this spec is tested on both. macOS and Linux come later and are listed in the caveats below so they stay in mind. On Windows, Tauri uses the system WebView2 runtime (preinstalled on Windows 11, bootstrapped by the installer on Windows 10 where it is missing).
+Windows 11 is the only v1 target, and it is what everything in this spec is built and tested on. Windows 10 is not a target for now. Nothing should be done that knowingly rules it out, but it is not tested. macOS and Linux come later and are listed in the caveats below so they stay in mind. Tauri uses the system WebView2 runtime, which is preinstalled on Windows 11.
 
-Two windows:
+Two visible windows (a third, hidden webview runs capability logic, see 8.10):
 
 1. **Overlay window (compact mode):** frameless, transparent, always on top, no taskbar entry, not focus-stealing until clicked. Contains the fox, dock, and open card. Click-through on transparent regions so it never blocks what is behind it.
 2. **Main window (fullscreen mode):** a normal resizable window that can be maximized or fullscreen. Contains the home dashboard, module pages, module manager, and settings.
@@ -629,7 +675,7 @@ Tooling: pnpm workspaces for the JS side, Cargo workspace for Rust, `just` or `m
 
 ## 18. Build and release
 
-- CI: lint, test, build on Windows, macOS, and Linux.
+- CI: lint, test, and build on Windows. Rust crate tests and JS tests also run on Linux, which is cheap and keeps the core portable. macOS is added when it becomes a target.
 - Releases: installers per OS from tagged builds. Auto-update later, signed.
 - Versioning: semantic versioning for the app, separate `api_version` integer for the capability SDK. Breaking SDK changes bump `api_version`, and the host can load only capabilities whose version it supports.
 
@@ -641,11 +687,12 @@ Each phase has acceptance criteria so "done" is not a feeling.
 
 Work:
 - Repo, workspaces, CI, formatting, lint.
-- Spike A: transparent, frameless, always-on-top Tauri window with click-through on transparent areas, on both Windows 10 and Windows 11. Also check behavior over fullscreen video and games, including how to detect a fullscreen app.
+- Spike A: transparent, frameless, always-on-top Tauri window with click-through on transparent areas, on Windows 11. Also check behavior over fullscreen video and games, including how to detect a fullscreen app.
 - Spike B: Rive state machine playing in the Tauri webview with a placeholder fox.
 - Spike C: global hotkey summon latency measurement.
+- Spike D: load a capability module from a folder outside the app bundle, render its view with the shell's React, and call a tool in a hidden logic host webview from the overlay (see 8.10).
 
-Done when: spikes A to C work on both Windows 10 and Windows 11, and any blockers (especially transparency and click-through) are written down. Android is not part of Phase 0.
+Done when: spikes A to D work on Windows 11, and any blockers (especially transparency and click-through) are written down. Android is not part of Phase 0.
 
 ### Phase 1: The shell
 
@@ -657,6 +704,7 @@ Work:
 - Personality engine v0 (tone setting, microcopy packs, cooldowns) driven by a debug panel that fires fake events.
 - Theme system (theme files, the built-in Frost theme plus at least one more, light and dark modes) and reduced motion.
 - Config service v0 with hot reload.
+- Core database with the core migrations for `device`, `kv`, and `migrations` (position memory needs `kv`).
 
 Done when: you can summon and dismiss Frosty reliably, switch between compact and fullscreen, fire fake events from the debug panel and see the right reactions, and edit `frosty.toml` by hand and see changes live.
 
@@ -666,6 +714,7 @@ Work:
 - Capability manifest spec, validator, SDK v1, host with lifecycle and permissions.
 - Module manager UI (list, toggle, status, permissions prompt, settings form generated from schema, open config file).
 - Storage service with per-capability migrations.
+- Scheduler core (persistent one-shot and recurring jobs) and a minimal notify path, so the SDK's `ctx.scheduler` and `ctx.notify` are real from the start.
 - Scaffold tool that generates an empty capability.
 - A trivial "hello" capability used as the test fixture.
 
@@ -675,7 +724,7 @@ Done when: you can scaffold a new capability, drop it in the folder, enable it f
 
 Work:
 - Tasks capability built entirely on the SDK: list, add, complete, due dates, recurring reminders, quick action.
-- Scheduler and notification center fully wired. Frosty nudges on a reminder.
+- Scheduler and notification center fully wired: missed-job policies, do-not-disturb, fullscreen wait, rate limiting. Frosty nudges on a reminder.
 - Reactions: task created, completed, streak.
 
 Done when: you use it for your own tasks for a week, reminders fire when Frosty is hidden, and nothing in core had to special-case Tasks.
@@ -748,7 +797,7 @@ Done when: that capability works end to end, a killed Python process recovers or
 
 | Question | Answer |
 |----------|--------|
-| Primary OS for the laptop | Windows, and both Windows 10 and Windows 11 must work |
+| Primary OS for the laptop | Windows 11. Windows 10 is not a target for now. |
 | Phone | Android, built later, not now. No iOS. |
 | How mirror tone should work | Not needed now. Deferred. v1 has a manual casual or neutral setting. |
 | Dock shape | Pill attached to the fox |
@@ -788,7 +837,7 @@ Done when: that capability works end to end, a killed Python process recovers or
 | D11 | Native modules first, external integrations as optional adapters | Agreed |
 | D12 | Compact floating mode plus fullscreen mode | Agreed |
 | D13 | Tone setting with mirror mode, casual back when you are casual | Superseded by D16 (mirror deferred) |
-| D14 | Windows (10 and 11) is the only v1 desktop target | Agreed |
+| D14 | Windows 11 is the only v1 desktop target | Agreed, narrowed by D23 |
 | D15 | Android is the only mobile target, built after the desktop app is solid. No iOS. | Agreed |
 | D16 | Mirror tone deferred. v1 tone is a manual casual or neutral setting | Agreed |
 | D17 | Capabilities start TypeScript only, with a reserved `runtime` field and the seams listed in 8.9 | Agreed |
@@ -797,9 +846,15 @@ Done when: that capability works end to end, a killed Python process recovers or
 | D20 | Multiple themes via theme files (see DESIGN_SPEC.md section 13). Direction is pixel or retro, no generic AI-generated look. | Agreed, theme list open |
 | D21 | Python backends are added later on a real need (trigger in 8.9). Only the seams are built now, not the protocol. | Agreed |
 | D22 | Rust capabilities are not planned. WASM is a later option if real sandboxing is needed. | Agreed in principle |
-| D23 | Windows 10 and Windows 11 are both supported and both tested | Agreed |
+| D23 | Windows 11 only for now. Windows 10 is not supported or tested until there is a reason to add it. | Agreed, replaces the earlier "both Windows 10 and 11" |
 | D24 | Data and config live in the standard OS app-data folder. No user-chosen folder in v1. | Agreed |
 | D25 | Reminders wait in history while a fullscreen app is in front | Agreed |
 | D26 | The module card opens beside the fox | Agreed |
 | D27 | English only in v1. All strings live in data files so Tamil can be added later without code changes. | Agreed |
 | D28 | Surfaces use subtle blur where supported, with a solid fallback. A theme can set its own surface style, and pixel themes default to solid. | Agreed, tension with the pixel look handled per theme |
+| D29 | Capability logic runs in a hidden logic host webview, and views run in the overlay and main windows. Logic and views are separate entries (see 8.2, 8.10). | Proposed, verified by Phase 0 Spike D |
+| D30 | Capability settings live in `capability-config/<id>.toml`, not inside the capability folder | Agreed |
+| D31 | `frosty.toml` is the only store for the enabled list and permission grants. `capability_state` holds runtime facts only. | Agreed |
+| D32 | Capabilities are discovered in two roots: the app bundle (built-in) and `<frosty-home>/capabilities` (user) | Agreed |
+| D33 | Webviews block direct network access by content security policy. Network goes through `ctx.host.network`, enforced in Rust. | Agreed |
+| D34 | CI runs the full pipeline on Windows and tests only on Linux | Agreed |

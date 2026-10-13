@@ -1,10 +1,10 @@
 # Frosty: Implementation Plan
 
-Status: Draft v0.1
+Status: Draft v0.2 (Windows 11 only, spec fixes applied)
 Date: 2026-10-14
-Source docs: PROJECT_SPEC.md (v0.4), DESIGN_SPEC.md (v0.4)
+Source docs: PROJECT_SPEC.md (v0.5), DESIGN_SPEC.md (v0.5)
 
-This plan turns the two specs into an ordered build sequence. References like `P 7.4` and `D 5.2` point to sections of PROJECT_SPEC.md and DESIGN_SPEC.md. Where this plan and a spec disagree, the item is listed in section 3 so the spec can be updated; nothing here silently overrides a spec.
+This plan turns the two specs into an ordered build sequence. References like `P 7.4` and `D 5.2` point to sections of PROJECT_SPEC.md and DESIGN_SPEC.md. The specs and this plan agree as of v0.5; section 3 records what was changed in the specs to get there.
 
 How to use it: work top to bottom. Each milestone has a task list and an exit check. Tick tasks as they land. Do not start a phase until the previous phase's exit check passes.
 
@@ -14,8 +14,10 @@ How to use it: work top to bottom. Each milestone has a task list and an exit ch
 
 | Track | Phases | Target |
 |-------|--------|--------|
-| v1 (this plan, detailed) | 0 to 5 | Windows 10 and 11 desktop app with Tasks plus one more capability |
+| v1 (this plan, detailed) | 0 to 5 | Windows 11 desktop app with Tasks plus one more capability |
 | Later (outlined only) | 6, 7, triggered Python phase | Android, more capabilities, adapters, sync |
+
+Platform: Windows 11 only (P D23). Windows 10 is not built for or tested. Nothing should knowingly rule it out, but no milestone waits on it.
 
 Sizes used below are relative effort for one person, not dates: S (a day or two), M (about a week), L (two weeks or more).
 
@@ -25,38 +27,43 @@ These are open in the specs. Each has a default so work is never blocked, but th
 
 | # | Decision | Needed by | Default if undecided | Cost of changing later |
 |---|----------|-----------|----------------------|------------------------|
-| 1 | Fox art style: pixel or smooth (P 21.1, D 17.1). Picks Rive versus sprite sheets. | Start of M1.2 | Rive placeholder as D 2.3 says, behind a renderer interface that also has a sprite-sheet driver stub | Medium. The placeholder skin is redone; the contract and shell are not. |
-| 2 | Process model for capability logic (section 4.1 of this plan) | End of Phase 0 | Hidden logic host webview | High after Phase 2, so settle it in Spike D |
-| 3 | Windows 10 test environment: a real machine or a VM with GPU acceleration | Phase 0 | VM | None, but Spike A cannot be signed off without it |
-| 4 | Second theme for Phase 1 (P 21.5, D 17.2) | M1.5 | Cartridge, because it has seed values and exercises hard shadows and zero radius | Low |
-| 5 | Pixel display font (D 17.3) | M1.5 | Pixelify Sans | Low |
-| 6 | Default tone (P 21.4) | M1.4 | `casual` | Low |
-| 7 | Second capability for Phase 4 | Start of Phase 4 | Guitar log (duration and streak data, very unlike Tasks) | Low |
-| 8 | Eye follow, sound, idle sleepy, home default (D 17.4 to 17.7) | Phase 5 | Eye follow off, silent, sleepy on, open on home | Low |
-| 9 | Repo name. P 8 says `frosty-companion`; the repo is currently `frosty_v1`. | Phase 0 | Keep the folder, name the packages and app `frosty-companion` | Low |
+| 1 | Fox art style: pixel or smooth (P 21.1, D 17.1). Picks Rive versus sprite sheets. | Start of M1.3 | Rive placeholder as D 2.3 says, behind a renderer interface that also has a sprite-sheet driver stub | Medium. The placeholder skin is redone; the contract and shell are not. |
+| 2 | Process model for capability logic (P 8.10, D29) | End of Phase 0 | Hidden logic host webview, as now written in the spec | High after Phase 2, so Spike D confirms it or switches to the fallback |
+| 3 | Second theme for Phase 1 (P 21.5, D 17.2) | M1.5 | Cartridge, because it has seed values and exercises hard shadows and zero radius | Low |
+| 4 | Pixel display font (D 17.3) | M1.5 | Pixelify Sans | Low |
+| 5 | Default tone (P 21.4) | M1.4 | `casual` | Low |
+| 6 | Second capability for Phase 4 | Start of Phase 4 | Guitar log (duration and streak data, very unlike Tasks) | Low |
+| 7 | Eye follow, sound, idle sleepy, home default (D 17.4 to 17.7) | Phase 5 | Eye follow off, silent, sleepy on, open on home | Low |
+| 8 | Repo name. P 8 says `frosty-companion`; the repo is currently `frosty_v1`. | Phase 0 | Keep the folder, name the packages and app `frosty-companion` | Low |
 
-## 3. Spec gaps and conflicts to fix first
+## 3. Spec fixes applied in v0.5
 
-Small edits to the specs, done as the first task of Phase 0 so the build has one answer for each.
+The first draft of this plan found gaps and contradictions in the specs. They are now fixed in the specs themselves. This table is the record.
 
-| # | Issue | Where | Recommended resolution |
-|---|-------|-------|------------------------|
-| G1 | Capability config path is given two ways: `capabilities/<id>/config.toml` and `capability-config/<id>.toml` | P 7.1, P 8.7 versus P 9.1 | Use `capability-config/<id>.toml`. Built-ins live in the read-only app bundle, so config cannot sit inside the capability folder. |
-| G2 | Built-ins ship in the app bundle but discovery only mentions the Frosty Home folder | P 8.8, P 7.9 | Two discovery roots: bundle resources (built-in, cannot be removed) and `<frosty-home>/capabilities` (user). A user folder with a built-in's id is rejected. |
-| G3 | Enabled flag and granted permissions are stored in both `frosty.toml` and the `capability_state` table | P 8.6, P 9.2, P 10.2 | `frosty.toml` is the source of truth (principle 4). `capability_state` keeps only runtime facts: installed version, state, last error, error count. |
-| G4 | Manifest `[[tools]]` has no schema fields, though tools must have input and output schemas | P 8.1, P 8.5 | Add `input_schema` and `output_schema` paths to `[[tools]]`, plus an optional `quick_action_control` (stepper, text, toggle, button) for D 4.4. |
-| G5 | Manifest reaction intensity is a word (`"small"`); the engine takes 0 to 1 | P 8.1, P 7.6 | Accept a number or a named level. Map `small` 0.3, `medium` 0.5, `large` 0.8, matching D 8.1. |
-| G6 | Skin contract has no inputs for `bye`, `mode_expand`, or `mode_collapse`, which are listed as states | D 2.4, D 2.5 | Add `bye` trigger and a `mini` boolean (rail size) to the contract. |
-| G7 | The SDK example registers React components and a badge function inside `onActivate`, which assumes logic and views share one JS context. The app has two windows, and D 7.2 rule 10 forbids shared in-memory state. | P 8.2, P 12.1, D 7.2 | See 4.1 below. Views are declared separately from logic, and badges are values the logic pushes. |
-| G8 | Permissions must be enforced in Rust, but capability code can call `fetch` in the webview directly | P 8.6, P 13 | See 4.3 below. A strict CSP blocks direct network access; `ctx.host.network` goes through Rust. |
-| G9 | CI is specified for Windows, macOS, and Linux, but v1 is Windows only | P 18, D14 | Windows runs the full pipeline. Linux runs Rust crate tests and JS tests only (cheap, keeps the core portable). No macOS until it is a target. |
-| G10 | Phase 1 needs position memory and onboarding state (`kv` table), but the storage service is scheduled for Phase 2 | P 19, P 10.2 | Core database and core migrations land in Phase 1. Per-capability storage stays in Phase 2. |
-| G11 | SDK v1 (Phase 2) exposes `ctx.scheduler` and `ctx.notify`, but both are "fully wired" only in Phase 3 | P 19 | Phase 2 ships the scheduler core and a minimal notify path. Phase 3 adds missed-job policies, do-not-disturb, fullscreen wait, rate limits, and the nudge UI. |
-| G12 | Specs sit at the repo root; the layout puts them in `docs/` | P 16 | Move both specs and this plan to `docs/` when the workspace is created. |
+| # | Issue | Resolution | Now in |
+|---|-------|------------|--------|
+| G1 | Capability config path was given two ways | `capability-config/<id>.toml`. Built-ins live in the read-only app bundle, so config cannot sit inside the capability folder. | P 7.1, P 8, P 8.7, D30 |
+| G2 | Built-ins ship in the app bundle but discovery only mentioned the Frosty Home folder | Two discovery roots. A user folder with a built-in's id is rejected. | P 7.9, P 8.8, D32 |
+| G3 | Enabled flag and permissions were stored in both `frosty.toml` and `capability_state` | `frosty.toml` is the only store. `capability_state` keeps runtime facts. | P 8.6, P 10.2, D31 |
+| G4 | Manifest `[[tools]]` had no schema fields | Added `input_schema`, `output_schema`, and `quick_action_control`. | P 8.1, P 8.5 |
+| G5 | Manifest reaction intensity was a word; the engine takes 0 to 1 | A number or a named level: `small` 0.3, `medium` 0.5, `large` 0.8. | P 8.1 |
+| G6 | Skin contract had no inputs for `bye`, `mode_expand`, `mode_collapse` | Added a `bye` trigger and a `mini` boolean. | D 2.5 |
+| G7 | The SDK example assumed logic and views share one JS context | Separate logic and views entries, client hooks for views, badges pushed as values. | P 8.2, P 8.10, D 7.2, D29 |
+| G8 | Capability code could bypass Rust permission checks with a direct `fetch` | CSP blocks direct network access. `ctx.host.network` goes through Rust. | P 8.6, D33 |
+| G9 | CI was specified for three operating systems | Full pipeline on Windows, tests only on Linux. | P 18, D34 |
+| G10 | Phase 1 needs the `kv` table, but storage was scheduled for Phase 2 | Core database lands in Phase 1. | P 19 |
+| G11 | SDK v1 exposes scheduler and notify before they were due to exist | Scheduler core and minimal notify in Phase 2, the rest in Phase 3. | P 19 |
+| G13 | Windows 10 was a required target | Windows 11 only for now. | P 12.1, P 19, D14, D23, D 17 |
 
-## 4. Architecture decisions this plan adds
+Still to do:
 
-The specs leave these implicit. They shape Phase 0 and Phase 2, so they are stated here and verified by Spike D.
+| # | Issue | Resolution | When |
+|---|-------|------------|------|
+| G12 | Specs sit at the repo root; the layout in P 16 puts them in `docs/` | Move both specs and this plan to `docs/` | M0.1 |
+
+## 4. Architecture notes
+
+These are now in the specs (P 8.2, P 8.6, P 8.10). They are repeated here with the build detail, because they shape Phase 0 and Phase 2 and are verified by Spike D.
 
 ### 4.1 Where capability logic runs
 
@@ -72,7 +79,7 @@ Recommendation: three webviews in one WebView2 browser process.
 
 Rules that follow:
 - A tool call always goes view to Rust to logic host and back. Rust checks permissions on the way through.
-- A capability entry exports logic and views separately: `defineCapability({ id, onActivate, onDeactivate })` loaded only in the logic host, and a `views` export loaded in the view windows. View code gets a small client (`useTool`, `useEvent`, `useQuery`) and no `ctx`.
+- A capability has two entries: `dist/index.js` with `defineCapability({ id, onActivate, onDeactivate })`, loaded only in the logic host, and `dist/views.js` with `defineViews({...})`, loaded in the view windows. View code gets a small client (`useTool`, `useEvent`, `useQuery`) and no `ctx`.
 - Dock badges are values: logic calls `ctx.views.setBadge(n)`, Rust stores the value and pushes it to both windows.
 - Mode switching carries state for free, because state lives in Rust and the logic host, not in either view window.
 - This is exactly the shape a Python backend needs later: the logic host is "runtime adapter 1" behind a Rust trait, and a sidecar becomes "runtime adapter 2" (P 8.9).
@@ -100,11 +107,11 @@ Alternative if Spike D shows a hidden webview is unreliable (throttled or suspen
 
 ## 5. Phase 0: Foundations and spikes
 
-Goal: prove the four risky things on real Windows 10 and 11 before any product code. Spike code is throwaway and lives in `spikes/`.
+Goal: prove the four risky things on Windows 11 before any product code. Spike code is throwaway and lives in `spikes/`.
 
 ### M0.1 Repo and tooling (S)
 
-- [ ] Apply the spec edits from section 3 and move the docs to `docs/`.
+- [ ] Move the specs and this plan to `docs/` (G12).
 - [ ] Install missing tools: `pnpm` and `just`. (Rust 1.97, Node 24, and WebView2 are already on the dev machine.)
 - [ ] Create the layout from P 16: `apps/desktop`, `crates/frosty-core`, `crates/frosty-host`, `packages/sdk`, `packages/ui`, `packages/character`, `capabilities/`, `tools/`, `spikes/`.
 - [ ] pnpm workspace, Cargo workspace, shared `tsconfig`, ESLint, Prettier, `rustfmt`, `clippy` with warnings as errors.
@@ -119,7 +126,6 @@ Goal: prove the four risky things on real Windows 10 and 11 before any product c
 - [ ] Mixed-DPI multi-monitor: correct size and position at 100, 125, 150, and 200 percent.
 - [ ] Fullscreen detection with `SHQueryUserNotificationState`, checked against a borderless game, an exclusive fullscreen game, a fullscreen browser video, and a presentation.
 - [ ] Record what the overlay does over each of those (hidden, visible, steals focus).
-- [ ] Repeat on Windows 10.
 
 ### M0.3 Spike B: character rendering (S)
 
@@ -130,7 +136,7 @@ Goal: prove the four risky things on real Windows 10 and 11 before any product c
 ### M0.4 Spike C: summon latency (S)
 
 - [ ] Global hotkey shows a pre-created hidden window. Timestamp the hotkey in Rust and the first painted frame in the webview.
-- [ ] Target under 150 ms (P 17). Record the median and worst of 50 runs on both Windows versions.
+- [ ] Target under 150 ms (P 17). Record the median and worst of 50 runs.
 
 ### M0.5 Spike D: capability loading and process model (M)
 
@@ -144,8 +150,8 @@ Added by this plan. It covers the risk in 4.1 and 4.2.
 
 ### Phase 0 exit check
 
-- [ ] Spikes A to D pass on Windows 10 and Windows 11, or each failure has a written workaround.
-- [ ] `docs/spike-findings.md` records measurements, blockers, and the final answers to decisions 1 to 3.
+- [ ] Spikes A to D pass on Windows 11, or each failure has a written workaround.
+- [ ] `docs/spike-findings.md` records measurements, blockers, and the final answers to decisions 1 and 2.
 - [ ] CI is green.
 
 ## 6. Phase 1: The shell
@@ -201,7 +207,7 @@ Depends on decision 1 and Spike B.
 - [ ] `packages/ui` tokens as CSS custom properties: color (semantic set from D 13.2), type scale, spacing, radius, elevation, motion (D 9).
 - [ ] Theme loader in Rust: parse theme TOML, reject a theme missing a required token and keep the previous one, watch the `themes/` folder.
 - [ ] Optional tokens wired end to end: `radius-scale`, `shadow-style`, `border-width`, `surface-style`, `font-display`.
-- [ ] Built-in themes: Frost (light and dark) and the theme from decision 4.
+- [ ] Built-in themes: Frost (light and dark) and the theme from decision 3.
 - [ ] Mode `system`, `light`, `dark`, with fallback when a theme lacks the requested mode.
 - [ ] Reduced motion: follows the OS, overridable, switches the character to static poses and motion tokens to short fades.
 - [ ] A contrast check script run in CI over every built-in theme (AA).
@@ -219,7 +225,7 @@ Depends on decision 1 and Spike B.
 
 ### Phase 1 exit check (P 19)
 
-- [ ] Summon and dismiss work 50 times in a row by hotkey and by tray, on both Windows versions.
+- [ ] Summon and dismiss work 50 times in a row by hotkey and by tray.
 - [ ] Compact and fullscreen switch without losing state.
 - [ ] Fake events from the debug panel produce the reactions in D 8.1, and cooldowns hold.
 - [ ] Hand-editing `frosty.toml` (tone, theme, hotkey, size) applies live; a broken edit shows an error and keeps the last good config.
@@ -320,7 +326,7 @@ Built in `capabilities/tasks` with the SDK only.
 
 ### M4.1 Second capability (L)
 
-- [ ] Build the capability from decision 7 from the scaffold, with a `page` view and at least one `widget`.
+- [ ] Build the capability from decision 6 from the scaffold, with a `page` view and at least one `widget`.
 - [ ] Every SDK change it forces is recorded as additive or breaking.
 
 ### M4.2 Home dashboard (L)
@@ -351,13 +357,13 @@ Built in `capabilities/tasks` with the SDK only.
 - [ ] **M5.3 Data (M):** JSON export and import per capability and for the whole device, scheduled database backups, restore from backup, diagnostics copy button.
 - [ ] **M5.4 Themes (M):** remaining built-in themes (Frost Pixel, Snowfield, High Contrast), accent override with AA check, font scale, then the theme editor with live preview and contrast warnings.
 - [ ] **M5.5 Real character art (L, depends on the artist's timeline):** final skin dropped in through the contract with no code change. If that is not true, fix the contract.
-- [ ] **M5.6 Hardening (M):** performance pass against the P 17 targets, full accessibility audit against D 12, text scaling to 200 percent, installer with WebView2 bootstrap tested on a clean Windows 10 machine.
+- [ ] **M5.6 Hardening (M):** performance pass against the P 17 targets, full accessibility audit against D 12, text scaling to 200 percent, installer tested on a clean Windows 11 install.
 
 ### v1 exit check
 
-- [ ] Clean install on Windows 10 and Windows 11 goes from installer to a working reminder through onboarding alone.
+- [ ] A clean install on Windows 11 goes from installer to a working reminder through onboarding alone.
 - [ ] All P 17 performance numbers are measured and written down.
-- [ ] No open item in section 3.
+- [ ] Nothing left in the "Still to do" table in section 3.
 
 ## 11. Later phases (outline)
 
@@ -374,11 +380,9 @@ Built in `capabilities/tasks` with the SDK only.
 3. Every new setting lands in three places at once: the config model, the settings UI, and the example `frosty.toml` in the docs.
 4. Every user-visible string goes in a microcopy or locale file.
 5. Components use tokens only. A lint rule rejects hex colors and raw pixel font sizes in `packages/ui` and `capabilities/`.
-6. Anything checked on Windows 11 is checked on Windows 10 before the milestone closes.
-7. When a spec turns out to be wrong, update the spec and its decision log in the same change.
+6. When a spec turns out to be wrong, update the spec and its decision log in the same change.
 
 ## 13. Immediate next steps
 
-1. Answer decisions 1 and 3 in section 2 (fox art style, Windows 10 test environment).
-2. Confirm or reject the resolutions in section 3 and the process model in 4.1.
-3. Start M0.1.
+1. Decide the fox art style (decision 1 in section 2). It is not needed until M1.3, so Phase 0 can start without it.
+2. Start M0.1.
