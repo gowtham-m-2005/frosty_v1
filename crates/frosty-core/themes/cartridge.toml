@@ -1,0 +1,29 @@
+# Cartridge: classic handheld four-tone green. Four colors only.
+#
+# The seed values in DESIGN_SPEC.md used the mid green (#306230) for accent and
+# muted text, which measures 3.3:1 against the light green. Both are text, so
+# they use the darkest tone (6.0:1) here.
+
+[theme]
+id = "cartridge"
+name = "Cartridge"
+modes = ["light"]
+surface-style = "solid"
+shadow-style = "hard"
+border-width = "2"
+radius-scale = "0"
+font-display = "Pixelify Sans"
+
+[light]
+bg = "#9BBC0F"
+surface = "#8BAC0F"
+surface-raised = "#8BAC0F"
+border = "#306230"
+text = "#0F380F"
+text-muted = "#0F380F"
+accent = "#0F380F"
+accent-on = "#9BBC0F"
+focus-ring = "#0F380F"
+success = "#306230"
+warning = "#0F380F"
+danger = "#0F380F"

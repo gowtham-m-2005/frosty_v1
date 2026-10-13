@@ -1,0 +1,28 @@
+{
+  "casual": {
+    "summon.first_today": ["hey, you're back.", "oh, hi again.", { "text": "morning. or whatever it is.", "weight": 1 }],
+    "tasks.created": ["got it.", "noted.", "on the list."],
+    "tasks.completed": ["nice, one down.", "one less thing.", "done and dusted."],
+    "reminder.due": ["psst, time for {title}.", "hey, {title}.", "{title}. now's good."],
+    "empty.generic": ["nothing here yet. suspicious.", "all quiet in here."],
+    "error.generic": ["oops, that didn't work.", "hm. that broke."],
+    "dnd.on": ["okay, quiet mode.", "shh. got it."],
+    "streak.milestone": ["{count} days in a row. look at you.", "{count} days straight. not bad."],
+    "setting.saved": ["saved.", "okay, changed."],
+    "onboarding.done": ["all set. i'll be around.", "that's it. call me when you need me."],
+    "quit": ["see you.", "bye for now."]
+  },
+  "neutral": {
+    "summon.first_today": ["Good to see you.", "Welcome back."],
+    "tasks.created": ["Task added.", "Task saved."],
+    "tasks.completed": ["Task completed.", "Marked as done."],
+    "reminder.due": ["Reminder: {title}.", "Due now: {title}."],
+    "empty.generic": ["Nothing here yet."],
+    "error.generic": ["Something went wrong.", "That did not work."],
+    "dnd.on": ["Do not disturb is on."],
+    "streak.milestone": ["{count}-day streak.", "{count} days in a row."],
+    "setting.saved": ["Setting saved."],
+    "onboarding.done": ["Setup complete."],
+    "quit": ["Goodbye."]
+  }
+}

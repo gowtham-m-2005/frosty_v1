@@ -1,0 +1,35 @@
+# Frost: the default theme. Smooth and calm, icy blue with an ember accent.
+
+[theme]
+id = "frost"
+name = "Frost"
+modes = ["light", "dark"]
+surface-style = "blur"
+
+[light]
+bg = "#F4F9FC"
+surface = "#FFFFFF"
+surface-raised = "#FFFFFF"
+border = "#D5E4EE"
+text = "#1B2A35"
+text-muted = "#5C7384"
+accent = "#F5913A"
+accent-on = "#1B1206"
+focus-ring = "#4F92C0"
+success = "#3FAE7A"
+warning = "#E3A02B"
+danger = "#D9534F"
+
+[dark]
+bg = "#0F1A22"
+surface = "#16242E"
+surface-raised = "#1D2F3B"
+border = "#2A3F4D"
+text = "#E8F1F7"
+text-muted = "#9DB4C3"
+accent = "#FFB066"
+accent-on = "#1B1206"
+focus-ring = "#A6CDE6"
+success = "#3FAE7A"
+warning = "#E3A02B"
+danger = "#D9534F"

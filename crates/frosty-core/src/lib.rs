@@ -1,4 +1,11 @@
 //! Frosty Core: the services that exist with zero capabilities installed.
 //!
-//! Config, storage, event bus, scheduler, and personality engine land here
-//! from Phase 1 on (docs/PROJECT_SPEC.md section 7).
+//! Everything here is plain Rust with no UI or Tauri dependency, so it can be
+//! unit-tested on its own (docs/PROJECT_SPEC.md section 7).
+
+pub mod config;
+pub mod db;
+pub mod events;
+pub mod home;
+pub mod personality;
+pub mod theme;

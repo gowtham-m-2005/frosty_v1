@@ -35,16 +35,21 @@ Decision needed in Phase 3 (not blocking Phase 1). Options, in order of preferen
 1. Do not ask the OS. Compare the foreground window's rectangle to its monitor, excluding Frosty's own windows. Needs a short test over a borderless game and a fullscreen video.
 2. Query `SHQueryUserNotificationState` only while the overlay is hidden, and remember the answer for as long as it stays visible. Cheap, but it cannot notice a game launching while Frosty is up.
 
-### Idle CPU of the polling click-through: too high
+### Click-through method: use the window region, not polling (confirmed)
 
-Measured over about 90 seconds with the overlay visible over a fullscreen video, polling at 60 Hz: 1.9 to 5.5 percent of one core, process only (the WebView2 child processes are not included). Worst single iteration was 20 to 29 ms, which would drop a frame. The target in PROJECT_SPEC.md 17 is "near zero CPU" while idle.
+| Method | Idle process CPU (overlay visible, over a fullscreen video) |
+|--------|--------------------------------------------------------------|
+| Poll the cursor at 60 Hz and toggle ignore-cursor-events | 1.9 to 5.5 percent of one core, with 20 to 29 ms hiccups |
+| `SetWindowRgn` to the union of the hit rectangles, no polling | 0.0 to 0.3 percent of one core |
 
-Recommended replacement, to be tested in the next spike iteration: no polling. Set the window region with `SetWindowRgn` to the union of the fox, dock, card, and chip rectangles whenever the page reports them. Windows then sends clicks outside the region to the window behind with zero per-frame work. Caveats to check: soft shadows and anti-aliased edges are clipped at the region edge (fine for the pixel themes, which have hard edges and hard shadows), and the region must update in step with animation (the card scale-in, the fox hop).
+Both methods pass the same self-test (pointer reaches the fox, dock, and card, and passes through transparent areas at 175 percent scaling). Numbers cover the main process only, not the WebView2 child processes, so the real total is higher for both, but the polling cost is gone.
+
+Decision: the window manager uses `SetWindowRgn`. Caveats to handle in Phase 1: soft shadows and anti-aliased edges are clipped at the region edge (fine for the pixel themes, which have hard edges), and the region has to follow animated elements (the card scale-in, the fox hop), so the page must report rectangles during animation or the region must be padded for the animation's extent.
 
 ### Still open
 
 - **Real borderless game and exclusive fullscreen game:** only a fullscreen video was tried.
-- **Region-based click-through** (above): not built yet.
+- **Region following animation:** the self-test used static boxes. Needs a check with the fox hop and card scale-in.
 - **Other scale factors** (100, 125, 150, 200 percent) and a second monitor: not tested.
 - **Focus behaviour:** not tested. Need to confirm the window does not take keyboard focus on show and that clicking a box does not steal focus from the previous app.
 

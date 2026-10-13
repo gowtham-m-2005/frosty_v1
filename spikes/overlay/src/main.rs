@@ -17,6 +17,7 @@ use serde::Deserialize;
 use tauri::{Emitter, State, WebviewUrl, WebviewWindowBuilder};
 use windows::Win32::{
     Foundation::{FILETIME, HWND, POINT},
+    Graphics::Gdi::{CombineRgn, CreateRectRgn, RGN_OR, SetWindowRgn},
     System::Threading::{GetCurrentProcess, GetProcessTimes},
     UI::{
         Shell::SHQueryUserNotificationState,
@@ -45,14 +46,40 @@ struct NamedRect {
 struct HitRects(Mutex<Vec<(String, Rect)>>);
 
 #[tauri::command]
-fn set_hit_rects(rects: Vec<NamedRect>, state: State<'_, Arc<HitRects>>) {
-    *state.0.lock().unwrap() = rects
+fn set_hit_rects(
+    rects: Vec<NamedRect>,
+    window: tauri::WebviewWindow,
+    state: State<'_, Arc<HitRects>>,
+) {
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let list: Vec<(String, Rect)> = rects
         .into_iter()
         .map(|r| {
             let rect = Rect { x: r.x, y: r.y, w: r.w, h: r.h };
             (r.id, rect)
         })
         .collect();
+    *state.0.lock().unwrap() = list.clone();
+
+    // Click-through without polling: clip the window to the union of the
+    // hit rectangles. Clicks outside the region go to the window behind.
+    if let Ok(hwnd) = window.hwnd() {
+        let hwnd = hwnd.0 as isize;
+        let _ = window.run_on_main_thread(move || unsafe {
+            let region = CreateRectRgn(0, 0, 0, 0);
+            for (_, r) in &list {
+                let piece = CreateRectRgn(
+                    (r.x * scale).floor() as i32,
+                    (r.y * scale).floor() as i32,
+                    ((r.x + r.w) * scale).ceil() as i32,
+                    ((r.y + r.h) * scale).ceil() as i32,
+                );
+                CombineRgn(Some(region), Some(region), Some(piece), RGN_OR);
+            }
+            // The window owns the region after this call.
+            SetWindowRgn(HWND(hwnd as _), Some(region), true);
+        });
+    }
 }
 
 fn log(line: &str) {
@@ -158,60 +185,27 @@ fn main() {
                     )
                     .build()?;
 
-            // Click-through controller: poll the cursor and flip
-            // ignore-cursor-events when it enters or leaves a hit rectangle.
+            // No click-through polling any more: the window region does it.
+            // This thread only logs the fullscreen state and the process CPU.
             let w = window.clone();
-            let rects_poll = rects.clone();
             thread::spawn(move || {
-                let mut ignoring: Option<bool> = None;
-                let mut polls = 0u64;
-                let mut toggles = 0u64;
-                let mut worst = Duration::ZERO;
                 let mut last_report = Instant::now();
                 let mut cpu_at_report = process_cpu_100ns();
                 let mut last_state = String::new();
-                let mut last_state_check = Instant::now() - Duration::from_secs(1);
                 loop {
-                    thread::sleep(Duration::from_millis(16));
-                    let t = Instant::now();
-                    let p = cursor();
-                    let origin = w.outer_position().unwrap_or_default();
-                    let scale = w.scale_factor().unwrap_or(1.0);
-                    let inside = rects_poll.0.lock().unwrap().iter().any(|(_, r)| {
-                        let x = f64::from(origin.x) + r.x * scale;
-                        let y = f64::from(origin.y) + r.y * scale;
-                        let (px, py) = (f64::from(p.x), f64::from(p.y));
-                        px >= x && px < x + r.w * scale && py >= y && py < y + r.h * scale
-                    });
-                    let want_ignore = !inside;
-                    if ignoring != Some(want_ignore) {
-                        let _ = w.set_ignore_cursor_events(want_ignore);
-                        ignoring = Some(want_ignore);
-                        toggles += 1;
+                    thread::sleep(Duration::from_secs(1));
+                    let s = notification_state();
+                    if s != last_state {
+                        log(&format!("fullscreen state: {s}"));
+                        let _ = w.emit("spike-status", format!("state: {s}"));
+                        last_state = s;
                     }
-                    polls += 1;
-                    worst = worst.max(t.elapsed());
-
-                    if last_state_check.elapsed() >= Duration::from_secs(1) {
-                        last_state_check = Instant::now();
-                        let s = notification_state();
-                        if s != last_state {
-                            log(&format!("fullscreen state: {s}"));
-                            let _ = w.emit("spike-status", format!("state: {s}"));
-                            last_state = s;
-                        }
-                    }
-
                     if last_report.elapsed() >= Duration::from_secs(10) {
                         let cpu_now = process_cpu_100ns();
                         let cpu_pct = (cpu_now - cpu_at_report) as f64
                             / (last_report.elapsed().as_secs_f64() * 1e7)
                             * 100.0;
-                        log(&format!(
-                            "poll: {polls} polls, {toggles} toggles, worst iteration {worst:?}, process CPU {cpu_pct:.2}% of one core"
-                        ));
-                        polls = 0;
-                        worst = Duration::ZERO;
+                        log(&format!("region mode: process CPU {cpu_pct:.2}% of one core"));
                         cpu_at_report = cpu_now;
                         last_report = Instant::now();
                     }
