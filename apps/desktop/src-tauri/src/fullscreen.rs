@@ -84,6 +84,54 @@ pub fn foreground_is_fullscreen() -> bool {
     false
 }
 
+/// Records the foreground window unless it is one of ours.
+#[cfg(windows)]
+pub fn remember_foreground(state: &crate::state::AppState) {
+    use std::sync::atomic::Ordering;
+    use windows::Win32::{
+        System::Threading::GetCurrentProcessId,
+        UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId},
+    };
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid != GetCurrentProcessId() {
+            state
+                .prev_foreground
+                .store(hwnd.0 as isize, Ordering::SeqCst);
+        }
+    }
+}
+
+#[cfg(windows)]
+pub fn restore_foreground(state: &crate::state::AppState) {
+    use std::sync::atomic::Ordering;
+    use windows::Win32::{
+        Foundation::HWND,
+        UI::WindowsAndMessaging::{IsWindow, SetForegroundWindow},
+    };
+    let raw = state.prev_foreground.load(Ordering::SeqCst);
+    if raw == 0 {
+        return;
+    }
+    unsafe {
+        let hwnd = HWND(raw as *mut _);
+        if IsWindow(Some(hwnd)).as_bool() {
+            let _ = SetForegroundWindow(hwnd);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn remember_foreground(_state: &crate::state::AppState) {}
+
+#[cfg(not(windows))]
+pub fn restore_foreground(_state: &crate::state::AppState) {}
+
 /// Minutes after midnight in the user's local time.
 #[cfg(windows)]
 pub fn local_minutes_of_day() -> u32 {

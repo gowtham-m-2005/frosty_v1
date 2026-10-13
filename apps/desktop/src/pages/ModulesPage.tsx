@@ -3,6 +3,7 @@ import { Banner, Button, PermissionSheet, SettingsForm, Toggle, type JsonSchema 
 
 import { api, type CapabilityInfo } from "../bridge";
 import { useCapabilities } from "../capabilities";
+import { useConfig } from "../hooks";
 
 const STATE_LABEL: Record<CapabilityInfo["state"], string> = {
   enabled: "On",
@@ -40,9 +41,11 @@ function Settings({ info }: { info: CapabilityInfo }) {
 
 function Row({
   info,
+  muted,
   onAskEnable,
 }: {
   info: CapabilityInfo;
+  muted: boolean;
   onAskEnable: (info: CapabilityInfo) => void;
 }) {
   const [showSettings, setShowSettings] = useState(false);
@@ -74,6 +77,16 @@ function Row({
               else void run(() => api.disableCapability(info.id));
             }}
           />
+          {on && info.permissions.some((p) => p.key === "notifications") ? (
+            <label className="module-mute">
+              <input
+                type="checkbox"
+                checked={muted}
+                onChange={(e) => void setMuted(info.id, e.target.checked)}
+              />{" "}
+              Mute reminders
+            </label>
+          ) : null}
           {info.has_settings ? (
             <Button onClick={() => setShowSettings((s) => !s)} aria-expanded={showSettings}>
               Settings
@@ -164,7 +177,15 @@ function Row({
   );
 }
 
+/** Muting is a list of ids in `notifications.muted`, so it is also in the file. */
+async function setMuted(id: string, muted: boolean) {
+  const config = await api.getConfig();
+  const current = config.notifications.muted.filter((m) => m !== id);
+  await api.setConfigValue("notifications.muted", muted ? [...current, id] : current);
+}
+
 export function ModulesPage() {
+  const config = useConfig();
   const { capabilities, rejected } = useCapabilities();
   const [asking, setAsking] = useState<CapabilityInfo | null>(null);
   const [busy, setBusy] = useState(false);
@@ -206,7 +227,12 @@ export function ModulesPage() {
       ) : (
         <ul className="module-list">
           {capabilities.map((c) => (
-            <Row key={c.id} info={c} onAskEnable={setAsking} />
+            <Row
+              key={c.id}
+              info={c}
+              muted={config?.notifications.muted.includes(c.id) ?? false}
+              onAskEnable={setAsking}
+            />
           ))}
         </ul>
       )}

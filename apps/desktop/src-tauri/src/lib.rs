@@ -88,6 +88,7 @@ pub fn run() {
             notify::run_notification_action,
             notify::get_dnd,
             notify::set_dnd_manual,
+            notify::restore_previous_focus,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

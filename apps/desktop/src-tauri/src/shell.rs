@@ -175,6 +175,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         builtin_root,
         device_id,
         fullscreen_app: std::sync::atomic::AtomicBool::new(false),
+        prev_foreground: std::sync::atomic::AtomicIsize::new(0),
         dnd_manual: std::sync::atomic::AtomicBool::new(dnd_manual),
         rate: Mutex::new(frosty_core::notifications::RateLimiter::default()),
         tray_dnd: Mutex::new(None),
@@ -387,6 +388,7 @@ pub fn summon(app: &AppHandle) {
         return;
     }
     *app.state::<AppState>().summon_started.lock().unwrap() = Some(Instant::now());
+    crate::fullscreen::remember_foreground(&app.state::<AppState>());
     let _ = windows::place_overlay(app, &overlay);
     let _ = overlay.show();
     let _ = app.emit_to(OVERLAY, "frosty://summon", ());

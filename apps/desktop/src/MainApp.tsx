@@ -10,7 +10,8 @@ import { Banner, Button } from "@frosty/ui";
 
 import { api, type DecisionPayload } from "./bridge";
 import { CapabilitySlot, useCapabilities } from "./capabilities";
-import { useConfig, useNotices, useTauriEvent, useTheme } from "./hooks";
+import { useConfig, useNotices, useTauriEvent, useTheme, useUnreadCount } from "./hooks";
+import { NotificationsPage } from "./pages/NotificationsPage";
 import { DebugPage } from "./pages/DebugPage";
 import { ModulesPage } from "./pages/ModulesPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -21,6 +22,7 @@ type Page = string;
 const FIXED_PAGES: { id: string; label: string; dev?: boolean }[] = [
   { id: "home", label: "Home" },
   { id: "modules", label: "Modules" },
+  { id: "notifications", label: "Notifications" },
   { id: "settings", label: "Settings" },
   { id: "debug", label: "Debug", dev: true },
 ];
@@ -31,6 +33,7 @@ export function MainApp() {
   const { modeFallback } = useTheme(config);
   const notices = useNotices();
   const { capabilities } = useCapabilities();
+  const unread = useUnreadCount();
   const [requestedPage, setPage] = useState<Page>("home");
   const [foxState, setFoxState] = useState<FoxState>("idle");
   const [foxIntensity, setFoxIntensity] = useState(0.5);
@@ -101,7 +104,14 @@ export function MainApp() {
           />
         ))}
         {fixed.slice(1).map((p) => (
-          <RailButton key={p.id} page={page} id={p.id} label={p.label} onSelect={setPage} />
+          <RailButton
+            key={p.id}
+            page={page}
+            id={p.id}
+            label={p.label}
+            badge={p.id === "notifications" ? unread : undefined}
+            onSelect={setPage}
+          />
         ))}
       </nav>
 
@@ -134,6 +144,7 @@ export function MainApp() {
             </section>
           )}
           {page === "modules" && <ModulesPage />}
+          {page === "notifications" && <NotificationsPage />}
           {page === "settings" && config && <SettingsPage config={config} />}
           {page === "debug" && <DebugPage />}
           {activeModule ? <CapabilitySlot info={activeModule} slot="page" /> : null}

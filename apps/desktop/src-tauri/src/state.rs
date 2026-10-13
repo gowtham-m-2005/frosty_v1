@@ -54,6 +54,9 @@ pub struct AppState {
     pub device_id: String,
     /// A fullscreen app is in front (reminders wait).
     pub fullscreen_app: AtomicBool,
+    /// The window that had focus before Frosty appeared, to give focus back
+    /// after a quick action (docs/DESIGN_SPEC.md 11). 0 when unknown.
+    pub prev_foreground: std::sync::atomic::AtomicIsize,
     /// Do not disturb switched on by hand, from the tray or settings.
     pub dnd_manual: AtomicBool,
     pub rate: Mutex<RateLimiter>,

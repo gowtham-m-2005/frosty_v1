@@ -291,3 +291,79 @@ html[data-window="overlay"] body {
 .module-error {
   margin-top: 12px;
 }
+
+/* Reminders and quick actions. */
+.overlay-nudge {
+  max-width: 280px;
+}
+.nudge-body {
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+.nudge-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.quick-tray {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: var(--border-width) solid var(--border);
+  border-radius: calc(24px * var(--radius-scale));
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+}
+.quick-error {
+  color: var(--danger);
+  font-size: 12px;
+  max-width: 160px;
+}
+.dock-slot {
+  position: relative;
+  display: inline-flex;
+}
+.dock-quick {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 16px;
+  border: var(--border-width) solid var(--border);
+  border-radius: calc(9px * var(--radius-scale));
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.module-mute {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.notification-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notification {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: var(--border-width) solid var(--border);
+}
+.notification-dismissed,
+.notification-dropped_muted,
+.notification-dropped_rate_limited {
+  opacity: 0.65;
+}
+.notification-actions {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}

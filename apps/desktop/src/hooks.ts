@@ -86,3 +86,24 @@ export function useDecisionLog(limit = 40): LoggedDecision[] {
   });
   return log;
 }
+
+/** Number of notifications not yet read, kept current. */
+export function useUnreadCount(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    void api
+      .listNotifications(200)
+      .then((all) =>
+        setCount(
+          all.filter(
+            (n) =>
+              n.read_at === null &&
+              n.state !== "dropped_muted" &&
+              n.state !== "dropped_rate_limited",
+          ).length,
+        ),
+      );
+  }, []);
+  useTauriEvent<{ unread: number }>("frosty://notifications-changed", (m) => setCount(m.unread));
+  return count;
+}

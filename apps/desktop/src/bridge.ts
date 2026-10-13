@@ -21,10 +21,13 @@ export interface FrostyConfig {
   };
   personality: { tone: Tone; locale: string; never_react: string[] };
   notifications: {
+    dnd_schedule_enabled: boolean;
     dnd_start: string;
     dnd_end: string;
     os_fallback: boolean;
     fullscreen_behavior: string;
+    muted: string[];
+    chip_seconds: number;
   };
   capabilities: { enabled: string[]; dock_order: string[] };
 }
@@ -71,6 +74,52 @@ export interface PermissionLine {
   sensitive: boolean;
 }
 
+export interface ToolInfo {
+  id: string;
+  title: string;
+  quick_action: boolean;
+  quick_action_control: string | null;
+  primary_field: string | null;
+  primary_min: number | null;
+  primary_max: number | null;
+}
+
+export interface NotificationAction {
+  label: string;
+  tool: string;
+  input?: Record<string, unknown>;
+}
+
+export interface NotificationRecord {
+  id: string;
+  owner: string;
+  title: string;
+  body: string;
+  actions: NotificationAction[];
+  created_at: number;
+  state: "held" | "delivered" | "dismissed" | "dropped_muted" | "dropped_rate_limited";
+  hold_reason: "do_not_disturb" | "fullscreen_app" | null;
+  delivered_at: number | null;
+  read_at: number | null;
+  dismissed_at: number | null;
+}
+
+/** What the core sends the overlay when a notification is shown. */
+export interface NudgeInfo {
+  id: string;
+  owner: string;
+  title: string;
+  body: string;
+  actions: NotificationAction[];
+  seconds: number;
+}
+
+export interface DndStatus {
+  manual: boolean;
+  active: boolean;
+  fullscreen_app: boolean;
+}
+
 export interface CapabilityInfo {
   id: string;
   name: string;
@@ -81,12 +130,7 @@ export interface CapabilityInfo {
   state: CapabilityState;
   error: string | null;
   error_count: number;
-  tools: {
-    id: string;
-    title: string;
-    quick_action: boolean;
-    quick_action_control: string | null;
-  }[];
+  tools: ToolInfo[];
   permissions: PermissionLine[];
   has_settings: boolean;
   entry_url: string;
@@ -144,6 +188,14 @@ export const api = {
   callTool: (tool: string, input: Record<string, unknown> = {}) =>
     invoke<unknown>("call_tool", { tool, input }),
   reveal: (which: "home" | "config" | "themes") => invoke<void>("reveal", { which }),
+  listNotifications: (limit = 50) => invoke<NotificationRecord[]>("list_notifications", { limit }),
+  markNotificationsRead: () => invoke<void>("notifications_mark_read"),
+  dismissNotification: (id: string) => invoke<void>("dismiss_notification", { id }),
+  runNotificationAction: (id: string, index: number) =>
+    invoke<unknown>("run_notification_action", { id, index }),
+  getDnd: () => invoke<DndStatus>("get_dnd"),
+  setDndManual: (on: boolean) => invoke<void>("set_dnd_manual", { on }),
+  restorePreviousFocus: () => invoke<void>("restore_previous_focus"),
 };
 
 export function on<T>(event: string, handler: (payload: T) => void): Promise<UnlistenFn> {

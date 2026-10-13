@@ -169,6 +169,7 @@ fn present(app: &AppHandle, n: &Notification) {
             if overlay.is_visible().unwrap_or(false) {
                 return true;
             }
+            crate::fullscreen::remember_foreground(&state);
             let _ = windows::place_overlay(app, &overlay);
             overlay.show().is_ok()
         })
@@ -326,6 +327,12 @@ pub fn set_dnd(app: &AppHandle, on: bool) {
         deliver_pending(app);
     }
     let _ = app.emit("frosty://dnd", json!({ "manual": on }));
+}
+
+/// After a quick action, hand focus back to the app the user was in.
+#[tauri::command]
+pub fn restore_previous_focus(state: State<'_, AppState>) {
+    crate::fullscreen::restore_foreground(&state);
 }
 
 #[tauri::command]

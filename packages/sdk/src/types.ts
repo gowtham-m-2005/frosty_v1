@@ -43,6 +43,14 @@ export interface ScheduleOptions {
   missed?: "fire_once_on_start" | "skip" | "fire_all";
 }
 
+/** A button on a notification: runs one of the module's tools. */
+export interface NotifyAction {
+  /** Up to 24 characters. */
+  label: string;
+  tool: string;
+  input?: Record<string, Json>;
+}
+
 export interface Db {
   insert(table: string, record: Record<string, Json>): Promise<Row>;
   get(table: string, id: string): Promise<Row | null>;
@@ -50,6 +58,8 @@ export interface Db {
   update(table: string, id: string, patch: Record<string, Json>): Promise<Row | null>;
   /** Marks the row deleted; the data stays so a later sync can see it. */
   softDelete(table: string, id: string): Promise<boolean>;
+  /** Undo of `softDelete`. Returns the row, or null if there was none. */
+  restore(table: string, id: string): Promise<Row | null>;
 }
 
 /**
@@ -86,7 +96,11 @@ export interface Ctx {
     ): Promise<string>;
     cancel(jobId: string): Promise<boolean>;
   };
-  notify(title: string, body?: string): Promise<void>;
+  /**
+   * Frosty appears and nudges. It may be held for do-not-disturb or a
+   * fullscreen app. Up to two actions become buttons.
+   */
+  notify(title: string, body?: string, options?: { actions?: NotifyAction[] }): Promise<void>;
   config: {
     get(): Promise<Record<string, unknown>>;
     onChange(handler: (values: Record<string, unknown>) => void): Promise<Unsubscribe>;

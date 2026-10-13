@@ -47,6 +47,27 @@ function HotkeyField({
   );
 }
 
+/** A time of day, saved when it changes. */
+function TimeField({
+  configKey,
+  value,
+  label,
+}: {
+  configKey: string;
+  value: string;
+  label: string;
+}) {
+  return (
+    <input
+      className="f-input"
+      type="time"
+      aria-label={label}
+      value={value}
+      onChange={(e) => e.target.value && set(configKey, e.target.value)}
+    />
+  );
+}
+
 export function SettingsPage({ config }: { config: FrostyConfig }) {
   const [themes, setThemes] = useState<ThemeInfo[]>([]);
   const [paths, setPaths] = useState<Paths | null>(null);
@@ -142,6 +163,63 @@ export function SettingsPage({ config }: { config: FrostyConfig }) {
             label="Fullscreen hotkey"
             configKey="hotkeys.fullscreen"
             value={config.hotkeys.fullscreen}
+          />
+        </Field>
+      </section>
+
+      <section aria-labelledby="s-notifications">
+        <h2 id="s-notifications">Notifications</h2>
+        <Field
+          label="Nightly do not disturb"
+          hint="Reminders wait until the window ends."
+          configKey="notifications.dnd_schedule_enabled"
+        >
+          <Toggle
+            label="Nightly do not disturb"
+            checked={config.notifications.dnd_schedule_enabled}
+            onChange={(v) => set("notifications.dnd_schedule_enabled", v)}
+          />
+        </Field>
+        <Field label="From" configKey="notifications.dnd_start">
+          <TimeField
+            label="Do not disturb starts"
+            configKey="notifications.dnd_start"
+            value={config.notifications.dnd_start}
+          />
+        </Field>
+        <Field label="Until" configKey="notifications.dnd_end">
+          <TimeField
+            label="Do not disturb ends"
+            configKey="notifications.dnd_end"
+            value={config.notifications.dnd_end}
+          />
+        </Field>
+        <Field
+          label="Reminders stay on screen for"
+          hint="Then they move to the notification list."
+          configKey="notifications.chip_seconds"
+        >
+          <input
+            className="f-input"
+            type="number"
+            min={5}
+            max={120}
+            aria-label="Seconds a reminder stays on screen"
+            value={config.notifications.chip_seconds}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (n >= 5 && n <= 120) set("notifications.chip_seconds", n);
+            }}
+          />
+        </Field>
+        <Field
+          label="Use a Windows notification if Frosty cannot appear"
+          configKey="notifications.os_fallback"
+        >
+          <Toggle
+            label="Use a Windows notification as a fallback"
+            checked={config.notifications.os_fallback}
+            onChange={(v) => set("notifications.os_fallback", v)}
           />
         </Field>
       </section>

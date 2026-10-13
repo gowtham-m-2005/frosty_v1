@@ -6,9 +6,15 @@ import {
   isFoxState,
   type FoxState,
 } from "@frosty/character";
-import { ModuleCardFrame, SpeechChip } from "@frosty/ui";
+import { Button, ModuleCardFrame, SpeechChip } from "@frosty/ui";
 
-import { api, type DecisionPayload } from "./bridge";
+import {
+  api,
+  type CapabilityInfo,
+  type DecisionPayload,
+  type NudgeInfo,
+  type ToolInfo,
+} from "./bridge";
 import { CapabilitySlot, useCapabilities } from "./capabilities";
 import { useConfig, useTauriEvent, useTheme } from "./hooks";
 
@@ -27,6 +33,108 @@ const DOCK_H = 56;
 const GAP = 12;
 const DOCK_VISIBLE = 6;
 
+interface QuickTarget {
+  capability: CapabilityInfo;
+  tool: ToolInfo;
+}
+
+/** One small control above the dock: a text field, stepper, toggle, or button. */
+function QuickActionTray({
+  target,
+  onDone,
+  onCancel,
+}: {
+  target: QuickTarget;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const { tool } = target;
+  const control = tool.quick_action_control ?? "text";
+  const [text, setText] = useState("");
+  const [amount, setAmount] = useState<number>(tool.primary_min ?? 1);
+  const [on, setOn] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const confirm = () => {
+    const field = tool.primary_field;
+    const input: Record<string, unknown> = {};
+    if (control === "text") {
+      if (!text.trim()) return;
+      if (field) input[field] = text.trim();
+    } else if (control === "stepper") {
+      if (field) input[field] = amount;
+    } else if (control === "toggle") {
+      if (field) input[field] = on;
+    }
+    setBusy(true);
+    setError(null);
+    api
+      .callTool(tool.id, input)
+      .then(() => {
+        onDone();
+        // Hand focus back to what the user was doing.
+        void api.restorePreviousFocus();
+      })
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div
+      data-hit
+      className="quick-tray"
+      role="group"
+      aria-label={tool.title}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      {control === "text" ? (
+        <input
+          className="f-input"
+          autoFocus
+          aria-label={tool.title}
+          placeholder={tool.title}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && confirm()}
+        />
+      ) : null}
+      {control === "stepper" ? (
+        <input
+          className="f-input"
+          type="number"
+          autoFocus
+          aria-label={tool.title}
+          min={tool.primary_min ?? undefined}
+          max={tool.primary_max ?? undefined}
+          value={amount}
+          onChange={(e) => setAmount(Number(e.target.value))}
+          onKeyDown={(e) => e.key === "Enter" && confirm()}
+        />
+      ) : null}
+      {control === "toggle" ? (
+        <label>
+          <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />{" "}
+          {tool.title}
+        </label>
+      ) : null}
+      <Button variant="primary" disabled={busy} onClick={confirm}>
+        {control === "button" ? tool.title : "Add"}
+      </Button>
+      {error ? (
+        <span role="alert" className="quick-error">
+          {error}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 /** Compact mode: the fox, its dock, a speech chip, and the open card. */
 export function OverlayApp() {
   const config = useConfig();
@@ -38,11 +146,17 @@ export function OverlayApp() {
   const [intensity, setIntensity] = useState(0.5);
   const [playKey, setPlayKey] = useState(0);
   const [chip, setChip] = useState<{ id: number; text: string } | null>(null);
+  const [nudge, setNudge] = useState<NudgeInfo | null>(null);
+  // Appeared only to deliver a reminder: fox and chip, no dock.
+  const [minimal, setMinimal] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [position, setPosition] = useState<FoxPosition>(DEFAULT_POSITION);
   const [openCard, setOpenCard] = useState<string | null>(null);
+  const [quick, setQuick] = useState<QuickTarget | null>(null);
   const stateTimer = useRef<number | undefined>(undefined);
   const chipTimer = useRef<number | undefined>(undefined);
+  const nudgeTimer = useRef<number | undefined>(undefined);
+  const minimalRef = useRef(false);
   const dockRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; start: FoxPosition } | null>(null);
 
@@ -72,8 +186,8 @@ export function OverlayApp() {
     const duration = STATE_DURATION_MS[next];
     if (duration !== null) {
       stateTimer.current = window.setTimeout(() => {
-        then?.();
         if (next !== "dismiss_out") setState("idle");
+        then?.();
       }, duration);
     }
   }, []);
@@ -92,32 +206,70 @@ export function OverlayApp() {
     });
   }, []);
 
-  useTauriEvent<void>("frosty://summon", () => {
-    setShown(true);
-    play("summon_in", 0.5);
-  });
-
   const dismiss = useCallback(() => {
     setOpenCard(null);
+    setQuick(null);
+    setNudge(null);
+    window.clearTimeout(nudgeTimer.current);
     play("dismiss_out", 0.5, () => {
       setShown(false);
+      setMinimal(false);
+      minimalRef.current = false;
       void api.overlayHidden();
     });
   }, [play]);
 
-  // The first press closes an open card, the second dismisses (docs/DESIGN_SPEC.md 4.1).
+  // Moving a reminder out of sight: it stays in the notification history.
+  const closeNudge = useCallback(() => {
+    window.clearTimeout(nudgeTimer.current);
+    setNudge(null);
+    if (minimalRef.current) dismiss();
+  }, [dismiss]);
+
+  useTauriEvent<void>("frosty://summon", () => {
+    setMinimal(false);
+    minimalRef.current = false;
+    setShown(true);
+    play("summon_in", 0.5);
+  });
+
+  // The first press closes an open card or tray, the second dismisses.
   useTauriEvent<void>("frosty://dismiss-request", () => {
-    if (activeCard) setOpenCard(null);
+    if (quick) setQuick(null);
+    else if (activeCard) setOpenCard(null);
     else dismiss();
   });
 
+  // Summoning while visible brings up the dock, even after a reminder.
   useTauriEvent<void>("frosty://focus-dock", () => {
-    dockRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    setMinimal(false);
+    minimalRef.current = false;
+    window.setTimeout(() => {
+      dockRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    }, 0);
   });
 
-  useTauriEvent<DecisionPayload>("frosty://decision", ({ decision }) => {
+  // A reminder was delivered: Frosty appears (if hidden) and nudges.
+  useTauriEvent<NudgeInfo>("frosty://notification", (n) => {
+    setNudge(n);
+    setAnnouncement(n.title);
+    window.clearTimeout(nudgeTimer.current);
+    nudgeTimer.current = window.setTimeout(() => closeNudge(), n.seconds * 1000);
+    if (!shown) {
+      minimalRef.current = true;
+      setMinimal(true);
+      setShown(true);
+      play("summon_in", 0.5, () => play("nudge", 0.6));
+    } else {
+      play("nudge", 0.6);
+    }
+  });
+
+  useTauriEvent<DecisionPayload>("frosty://decision", ({ event, decision }) => {
     if (decision.kind !== "play" || !shown) return;
     const { animation, intensity: amount, text, show_chip } = decision;
+    // A reminder shows its own chip, with its actions.
+    if (event === "core.notification") return;
     if (animation && isFoxState(animation)) {
       play(animation, amount);
     }
@@ -133,12 +285,14 @@ export function OverlayApp() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || !shown) return;
       e.preventDefault();
-      if (activeCard) setOpenCard(null);
+      if (quick) setQuick(null);
+      else if (activeCard) setOpenCard(null);
+      else if (nudge) closeNudge();
       else void api.toggleSummon();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [shown, activeCard]);
+  }, [shown, activeCard, quick, nudge, closeNudge]);
 
   // After a summon, report once the first frame is on screen (two animation
   // frames after the overlay is shown) so the core can log the latency.
@@ -158,9 +312,12 @@ export function OverlayApp() {
   // click-through. Runs through each animation so the region follows it.
   const layoutKey = [
     shown,
+    minimal,
     state,
     playKey,
     chip?.id,
+    nudge?.id,
+    quick?.tool.id,
     activeCard,
     dockItems.length,
     position.right,
@@ -247,7 +404,7 @@ export function OverlayApp() {
       </div>
       {shown ? (
         <>
-          {openInfo ? (
+          {openInfo && !minimal ? (
             <div data-hit className="overlay-card" style={cardStyle}>
               <ModuleCardFrame
                 title={openInfo.name}
@@ -262,7 +419,38 @@ export function OverlayApp() {
             </div>
           ) : null}
           <div className="overlay-stack" style={{ right: position.right, bottom: position.bottom }}>
-            {chip ? (
+            {nudge ? (
+              <div data-hit className="overlay-nudge" key={nudge.id}>
+                <SpeechChip>
+                  <strong>{nudge.title}</strong>
+                  {nudge.body ? <div className="nudge-body">{nudge.body}</div> : null}
+                  <div className="nudge-actions">
+                    {nudge.actions.slice(0, 2).map((action, index) => (
+                      <Button
+                        key={`${action.label}-${index}`}
+                        variant={index === 0 ? "primary" : "secondary"}
+                        onClick={() => {
+                          void api.runNotificationAction(nudge.id, index).catch(() => undefined);
+                          closeNudge();
+                        }}
+                      >
+                        {action.label}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="ghost"
+                      aria-label="Dismiss reminder"
+                      onClick={() => {
+                        void api.dismissNotification(nudge.id);
+                        closeNudge();
+                      }}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                </SpeechChip>
+              </div>
+            ) : chip ? (
               <div data-hit className="overlay-chip" key={chip.id}>
                 <SpeechChip>{chip.text}</SpeechChip>
               </div>
@@ -276,74 +464,104 @@ export function OverlayApp() {
             >
               <FoxView state={state} intensity={intensity} size={foxSize} playKey={playKey} />
             </div>
-            <div data-hit className="dock" ref={dockRef} role="toolbar" aria-label="Frosty dock">
-              {visibleItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="dock-button"
-                  aria-label={item.badge > 0 ? `${item.name}, ${item.badge}` : item.name}
-                  aria-pressed={activeCard === item.id}
-                  title={item.name}
-                  onClick={() => setOpenCard((cur) => (cur === item.id ? null : item.id))}
-                >
-                  {item.icon_url ? (
-                    <span
-                      className="dock-icon"
-                      style={{
-                        maskImage: `url(${item.icon_url})`,
-                        WebkitMaskImage: `url(${item.icon_url})`,
-                      }}
-                    />
-                  ) : (
-                    item.name.slice(0, 1)
-                  )}
-                  {item.badge > 0 ? (
-                    <span className="dock-badge" aria-hidden="true">
-                      {item.badge > 9 ? "9+" : item.badge}
+            {quick && !minimal ? (
+              <QuickActionTray
+                target={quick}
+                onDone={() => setQuick(null)}
+                onCancel={() => setQuick(null)}
+              />
+            ) : null}
+            {minimal ? null : (
+              <div data-hit className="dock" ref={dockRef} role="toolbar" aria-label="Frosty dock">
+                {visibleItems.map((item) => {
+                  const quickTool = item.tools.find((t) => t.quick_action);
+                  return (
+                    <span key={item.id} className="dock-slot">
+                      <button
+                        type="button"
+                        className="dock-button"
+                        aria-label={item.badge > 0 ? `${item.name}, ${item.badge}` : item.name}
+                        aria-pressed={activeCard === item.id}
+                        title={item.name}
+                        onClick={() => {
+                          setQuick(null);
+                          setOpenCard((cur) => (cur === item.id ? null : item.id));
+                        }}
+                      >
+                        {item.icon_url ? (
+                          <span
+                            className="dock-icon"
+                            style={{
+                              maskImage: `url(${item.icon_url})`,
+                              WebkitMaskImage: `url(${item.icon_url})`,
+                            }}
+                          />
+                        ) : (
+                          item.name.slice(0, 1)
+                        )}
+                        {item.badge > 0 ? (
+                          <span className="dock-badge" aria-hidden="true">
+                            {item.badge > 9 ? "9+" : item.badge}
+                          </span>
+                        ) : null}
+                      </button>
+                      {quickTool ? (
+                        <button
+                          type="button"
+                          className="dock-quick"
+                          aria-label={quickTool.title}
+                          title={quickTool.title}
+                          onClick={() => {
+                            setOpenCard(null);
+                            setQuick({ capability: item, tool: quickTool });
+                          }}
+                        >
+                          +
+                        </button>
+                      ) : null}
                     </span>
-                  ) : null}
-                </button>
-              ))}
-              {overflow.length > 0 ? (
+                  );
+                })}
+                {overflow.length > 0 ? (
+                  <button
+                    type="button"
+                    className="dock-button"
+                    aria-label={`${overflow.length} more modules`}
+                    title="More modules"
+                    onClick={() => void api.openMain("modules")}
+                  >
+                    …
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="dock-button"
-                  aria-label={`${overflow.length} more modules`}
-                  title="More modules"
+                  aria-label="Open the module manager"
+                  title="Modules"
                   onClick={() => void api.openMain("modules")}
                 >
-                  …
+                  +
                 </button>
-              ) : null}
-              <button
-                type="button"
-                className="dock-button"
-                aria-label="Open the module manager"
-                title="Modules"
-                onClick={() => void api.openMain("modules")}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="dock-button"
-                aria-label="Open fullscreen"
-                title="Fullscreen"
-                onClick={() => void api.toggleFullscreen()}
-              >
-                ⤢
-              </button>
-              <button
-                type="button"
-                className="dock-button"
-                aria-label="Dismiss Frosty"
-                title="Dismiss"
-                onClick={() => void api.toggleSummon()}
-              >
-                ×
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="dock-button"
+                  aria-label="Open fullscreen"
+                  title="Fullscreen"
+                  onClick={() => void api.toggleFullscreen()}
+                >
+                  ⤢
+                </button>
+                <button
+                  type="button"
+                  className="dock-button"
+                  aria-label="Dismiss Frosty"
+                  title="Dismiss"
+                  onClick={() => void api.toggleSummon()}
+                >
+                  ×
+                </button>
+              </div>
+            )}
           </div>
         </>
       ) : null}

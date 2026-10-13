@@ -191,7 +191,10 @@ describe("LogicHost", () => {
     await ctx.scheduler.every(60_000, { tool: "notes.sync" });
     await ctx.scheduler.cancel("job-1");
     await ctx.views.setBadge(3.7);
-    await ctx.notify("Hello", "body");
+    await ctx.notify("Hello", "body", {
+      actions: [{ label: "Done", tool: "notes.done", input: { id: "1" } }],
+    });
+    await ctx.db.restore("items", "r1");
 
     expect(bridge.of("cap_emit")[0]).toEqual({
       capability: "notes",
@@ -208,7 +211,9 @@ describe("LogicHost", () => {
       capability: "notes",
       title: "Hello",
       body: "body",
+      actions: [{ label: "Done", tool: "notes.done", input: { id: "1" } }],
     });
+    expect(bridge.of("cap_db").at(-1)).toMatchObject({ op: "restore", args: { id: "r1" } });
   });
 
   it("delivers only matching events to a subscription, and stops after unsubscribe", async () => {

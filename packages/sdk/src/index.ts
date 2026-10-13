@@ -13,6 +13,7 @@ export type {
   Db,
   FrostyEvent,
   Json,
+  NotifyAction,
   QueryOptions,
   Row,
   ScheduleOptions,

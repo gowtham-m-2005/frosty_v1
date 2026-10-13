@@ -68,6 +68,7 @@ export function createContext(
       update: (table, rowId, patch) =>
         db("update", table, { id: rowId, patch }) as Promise<Row | null>,
       softDelete: (table, rowId) => db("soft_delete", table, { id: rowId }) as Promise<boolean>,
+      restore: (table, rowId) => db("restore", table, { id: rowId }) as Promise<Row | null>,
     },
     events: {
       emit: (name, payload, significance) =>
@@ -121,8 +122,13 @@ export function createContext(
           args: { job_id: jobId },
         }),
     },
-    notify: (title, body) =>
-      bridge.invoke<void>("cap_notify", { capability: id, title, body: body ?? "" }),
+    notify: (title, body, options) =>
+      bridge.invoke<void>("cap_notify", {
+        capability: id,
+        title,
+        body: body ?? "",
+        actions: options?.actions ?? [],
+      }),
     config: {
       get: () => bridge.invoke<Record<string, unknown>>("get_capability_settings", { id }),
       onChange: async (handler) => {
