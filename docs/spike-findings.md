@@ -59,8 +59,49 @@ Not started.
 
 ## Spike C: summon latency
 
-Not started.
+Status: done for the debug build. A release build measurement is still worth doing before the Phase 1 sign-off.
 
-## Spike D: capability loading and process model
+Method: `spikes/latency/measure.ps1` starts the app, sends the real global hotkey (Ctrl+Alt+F) through `keybd_event` 50 times with a dismiss in between, and reads `%APPDATA%/frosty/logs/summon-latency.log`. Each sample runs from the start of the summon handler in Rust to the second animation frame painted by the overlay after it was shown. The app logs this itself, so any build can be measured the same way.
 
-Not started.
+| Metric | Result (debug build, 2560x1440 at 175 percent) |
+|--------|-----------------------------------------------|
+| Summons logged | 50 of 50 |
+| First (cold) | 108.1 ms |
+| Median | 49.1 ms |
+| 95th percentile | 56.6 ms |
+| Best / worst | 43.0 ms / 108.1 ms |
+
+Target in PROJECT_SPEC.md 17: under 150 ms. Met, including the cold first summon.
+
+Caveats: the clock starts when the hotkey handler runs, not at the key press, so the keyboard and the global-hotkey hook add a few milliseconds that are not in these numbers. The timing is to the second painted frame, which includes the compositor delay for a transparent window.
+
+## Spike D: capability loading and process model (spikes/capability)
+
+Status: passes every check below. The idle test ran 90 seconds, not the hour in the plan, so a long soak is still open.
+
+What was built: a Tauri app with a hidden "logic host" webview and a visible "view" webview. A custom URI scheme (`frosty-cap`) serves a capability folder that lives outside the app bundle. `react` and `react-dom/client` come from one import map shared by both windows. Run it with `spikes/capability/run.ps1`.
+
+| Check | Result |
+|-------|--------|
+| Capability logic module loaded from a folder outside the bundle, over the custom scheme | Pass |
+| Capability view module loaded the same way, rendered by the shell's React, `useState` from the capability works | Pass. One React instance, no invalid-hook error. |
+| Tool call view to Rust core to hidden logic host and back | Pass. 30 calls: best 1.3 ms, median 1.7 ms, worst 3.7 ms |
+| Unknown tool returns an error instead of hanging | Pass |
+| Direct network `fetch` from capability code | Blocked by the CSP (`connect-src ipc:`) |
+| Dynamic `import()` from an arbitrary origin | Blocked by the CSP |
+| Request path traversal on the capability scheme (`..`, absolute paths) | Rejected (unit test) |
+| Hidden logic host still answers with every window hidden, 90 s, ping every 5 s | 18 of 18 answered, 2.6 to 5.4 ms |
+| Timers in the hidden host are not throttled | A 1 s timer ticked 94 times in about 94 s |
+
+Memory (working set summed over the process tree, shared pages counted per process, debug build): 423 MB with the hidden logic host (9 processes) versus 335 MB without it (8 processes). The hidden webview costs roughly 90 MB. This is the figure to beat later; if it matters, the fallback in PROJECT_SPEC.md 8.10 (logic in the main window's webview) avoids it.
+
+Conclusions:
+- The three-webview model in PROJECT_SPEC.md 8.10 works as written. Decision D29 can move from proposed to agreed.
+- G8 holds: with a strict CSP, a capability cannot reach the network or load remote code by itself.
+- On Windows the scheme's origin is `http://frosty-cap.localhost`. The capability folder is served with `Access-Control-Allow-Origin: *`.
+
+Not covered:
+- The test CSP used `script-src 'unsafe-inline'` so the inline import map would run. The real app needs a hash or nonce for that inline script. Untested.
+- Only a one-view, one-capability case. Multiple capabilities, capability errors thrown during activation, and teardown on disable are Phase 2 work.
+- A real one-hour or overnight soak, and behaviour across sleep and wake.
+- The logic host window was created hidden; it was not first shown and then hidden.

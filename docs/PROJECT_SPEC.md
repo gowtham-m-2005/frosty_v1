@@ -852,7 +852,7 @@ Done when: that capability works end to end, a killed Python process recovers or
 | D26 | The module card opens beside the fox | Agreed |
 | D27 | English only in v1. All strings live in data files so Tamil can be added later without code changes. | Agreed |
 | D28 | Surfaces use subtle blur where supported, with a solid fallback. A theme can set its own surface style, and pixel themes default to solid. | Agreed, tension with the pixel look handled per theme |
-| D29 | Capability logic runs in a hidden logic host webview, and views run in the overlay and main windows. Logic and views are separate entries (see 8.2, 8.10). | Proposed, verified by Phase 0 Spike D |
+| D29 | Capability logic runs in a hidden logic host webview, and views run in the overlay and main windows. Logic and views are separate entries (see 8.2, 8.10). | Agreed. Verified by Phase 0 Spike D (see docs/spike-findings.md); a long idle soak is still open. |
 | D30 | Capability settings live in `capability-config/<id>.toml`, not inside the capability folder | Agreed |
 | D31 | `frosty.toml` is the only store for the enabled list and permission grants. `capability_state` holds runtime facts only. | Agreed |
 | D32 | Capabilities are discovered in two roots: the app bundle (built-in) and `<frosty-home>/capabilities` (user) | Agreed |

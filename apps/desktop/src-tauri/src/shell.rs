@@ -163,6 +163,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         hotkeys: Mutex::new(Hotkeys::default()),
         notices: Mutex::new(Vec::new()),
         started: Instant::now(),
+        summon_started: Mutex::new(None),
     });
 
     let handle = app.handle().clone();
@@ -345,6 +346,7 @@ pub fn summon(app: &AppHandle) {
         let _ = app.emit_to(OVERLAY, "frosty://focus-dock", ());
         return;
     }
+    *app.state::<AppState>().summon_started.lock().unwrap() = Some(Instant::now());
     let _ = windows::place_overlay(app, &overlay);
     let _ = overlay.show();
     let _ = app.emit_to(OVERLAY, "frosty://summon", ());

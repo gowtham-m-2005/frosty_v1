@@ -68,6 +68,25 @@ pub fn report_hit_rects(window: WebviewWindow, rects: Vec<HitRect>) {
     windows::set_hit_region(&window, &rects);
 }
 
+/// Called by the overlay after its first painted frame following a summon.
+/// Appends the hotkey-to-paint time in milliseconds to `logs/summon-latency.log`
+/// (docs/PROJECT_SPEC.md 17: target under 150 ms).
+#[tauri::command]
+pub fn summon_painted(state: State<'_, AppState>) {
+    use std::io::Write;
+    let started = state.summon_started.lock().unwrap().take();
+    let Some(started) = started else { return };
+    let ms = started.elapsed().as_secs_f64() * 1000.0;
+    let _ = std::fs::create_dir_all(state.home.logs_dir());
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(state.home.logs_dir().join("summon-latency.log"))
+    {
+        let _ = writeln!(file, "{ms:.1}");
+    }
+}
+
 #[tauri::command]
 pub fn overlay_hidden(app: AppHandle) {
     shell::overlay_hidden(&app);

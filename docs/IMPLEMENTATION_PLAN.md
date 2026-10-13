@@ -19,8 +19,8 @@ Updated 2026-10-14. "Built" means code exists and automated checks pass. "Verifi
 | M0.1 Repo and tooling | Done, except CI never ran | Needs a push to GitHub to prove `ci.yml`. |
 | M0.2 Spike A (overlay) | Mostly done | Region click-through verified, 0.0 to 0.3 percent CPU. Fullscreen detection needs a different approach (see docs/spike-findings.md). Real game, other DPI levels, second monitor, focus: not tested. |
 | M0.3 Spike B (character) | Not started | Placeholder fox is CSS and SVG. Rive versus sprites is still open (decision 1). |
-| M0.4 Spike C (summon latency) | Not started | Needs timestamps from hotkey to first painted frame. |
-| M0.5 Spike D (capability loading) | Not started | Required before Phase 2. |
+| M0.4 Spike C (summon latency) | Done (debug build) | 50 of 50 summons, median 49 ms, p95 57 ms, cold 108 ms. Release build not yet measured. |
+| M0.5 Spike D (capability loading) | Done | Process model confirmed, CSP blocks network and remote code. 90 s idle only; hidden webview costs about 90 MB. |
 | M1.1 Core crate foundations | Built | Config, events, database, home. 42 unit tests. Rotating log files are not written yet. |
 | M1.2 Windows, tray, hotkeys | Built, partly verified | App launches and survives a broken config. Hotkeys, tray menu, drag, snap, and multi-monitor placement not yet exercised by hand. Position memory is one global position, not per monitor. |
 | M1.3 Character package | Built (placeholder) | All states exist as CSS animation. No Rive, no skin loader, no skin contract validation. |

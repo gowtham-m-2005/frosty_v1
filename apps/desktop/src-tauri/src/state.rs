@@ -36,6 +36,8 @@ pub struct AppState {
     pub hotkeys: Mutex<Hotkeys>,
     pub notices: Mutex<Vec<Notice>>,
     pub started: Instant,
+    /// Set when a summon begins; read by `summon_painted` to measure latency.
+    pub summon_started: Mutex<Option<Instant>>,
 }
 
 impl AppState {

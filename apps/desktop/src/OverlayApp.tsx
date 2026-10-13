@@ -111,6 +111,20 @@ export function OverlayApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, [shown]);
 
+  // After a summon, report once the first frame is on screen (two animation
+  // frames after the overlay is shown) so the core can log the latency.
+  useEffect(() => {
+    if (!shown) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => void api.summonPainted());
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [shown]);
+
   // Tell the core which rectangles take the mouse; everything else is
   // click-through. Runs through each animation so the region follows it.
   const layoutKey = [

@@ -42,6 +42,7 @@ pub fn run() {
             commands::set_config_value,
             commands::fire_event,
             commands::report_hit_rects,
+            commands::summon_painted,
             commands::overlay_hidden,
             commands::toggle_summon,
             commands::toggle_fullscreen,

@@ -76,6 +76,7 @@ export const api = {
   fireEvent: (name: string, payload: unknown = {}, significance?: number) =>
     invoke<void>("fire_event", { name, payload, significance }),
   reportHitRects: (rects: HitRect[]) => invoke<void>("report_hit_rects", { rects }),
+  summonPainted: () => invoke<void>("summon_painted"),
   overlayHidden: () => invoke<void>("overlay_hidden"),
   toggleSummon: () => invoke<void>("toggle_summon"),
   toggleFullscreen: () => invoke<void>("toggle_fullscreen"),

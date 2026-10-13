@@ -1,0 +1,4 @@
+node_modules/
+tmp/
+ui/js/vendor-*.js
+spike.log
