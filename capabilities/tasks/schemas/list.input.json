@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "filter": { "type": "string", "enum": ["open", "done", "all"] },
+    "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+  },
+  "additionalProperties": false
+}

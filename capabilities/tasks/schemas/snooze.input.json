@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "required": ["id"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "minutes": { "type": "integer", "minimum": 1, "maximum": 1440 }
+  },
+  "additionalProperties": false
+}

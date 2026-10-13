@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "remind_at_due": {
+      "type": "boolean",
+      "title": "Remind me when a task is due",
+      "description": "Frosty nudges you at the due time. Turn this off to keep due dates without reminders.",
+      "default": true
+    },
+    "snooze_minutes": {
+      "type": "integer",
+      "title": "Snooze length (minutes)",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 240
+    },
+    "show_completed": {
+      "type": "boolean",
+      "title": "Show completed tasks in the card",
+      "default": false,
+      "x-frosty-group": "Display"
+    }
+  },
+  "additionalProperties": false
+}

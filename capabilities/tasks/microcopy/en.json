@@ -1,0 +1,10 @@
+{
+  "casual": {
+    "tasks.created": ["got it.", "noted.", "on the list."],
+    "tasks.completed": ["nice, one down.", "one less thing.", "done and dusted."]
+  },
+  "neutral": {
+    "tasks.created": ["Task added.", "Task saved."],
+    "tasks.completed": ["Task completed.", "Marked as done."]
+  }
+}

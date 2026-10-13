@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "required": ["id"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "notes": { "type": ["string", "null"], "maxLength": 2000 },
+    "due_at": { "type": ["integer", "null"], "minimum": 0 },
+    "recurrence": { "type": ["object", "null"] }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@frosty/cap-tasks",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node ../../tools/capability-build/build.mjs .",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@frosty/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "react": "^19.3.0"
+  }
+}

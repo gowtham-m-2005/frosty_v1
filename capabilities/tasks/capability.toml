@@ -1,0 +1,96 @@
+[capability]
+id = "tasks"
+name = "Tasks"
+version = "0.1.0"
+api_version = "1"
+runtime = "ts"
+description = "Tasks and reminders. Frosty nudges you when something is due."
+entry = "dist/index.js"
+views = "dist/views.js"
+icon = "assets/icon.svg"
+
+[permissions]
+storage = true
+scheduler = true
+notifications = true
+
+[storage]
+migrations = "migrations/"
+
+[settings]
+schema = "settings.schema.json"
+
+[[tools]]
+id = "tasks.add"
+title = "Add a task"
+input_schema = "schemas/add.input.json"
+quick_action = true
+quick_action_control = "text"
+
+[[tools]]
+id = "tasks.list"
+title = "List tasks"
+input_schema = "schemas/list.input.json"
+
+[[tools]]
+id = "tasks.complete"
+title = "Complete a task"
+input_schema = "schemas/id.input.json"
+
+[[tools]]
+id = "tasks.uncomplete"
+title = "Reopen a task"
+input_schema = "schemas/id.input.json"
+
+[[tools]]
+id = "tasks.update"
+title = "Edit a task"
+input_schema = "schemas/update.input.json"
+
+[[tools]]
+id = "tasks.delete"
+title = "Delete a task"
+input_schema = "schemas/id.input.json"
+
+[[tools]]
+id = "tasks.restore"
+title = "Undo a delete"
+input_schema = "schemas/id.input.json"
+
+[[tools]]
+id = "tasks.snooze"
+title = "Snooze a reminder"
+input_schema = "schemas/snooze.input.json"
+
+[[tools]]
+id = "tasks.stats"
+title = "Counts and streak"
+
+[[tools]]
+id = "tasks.remind"
+title = "Send a reminder for a task"
+input_schema = "schemas/remind.input.json"
+
+[[events]]
+id = "tasks.created"
+
+[[events]]
+id = "tasks.completed"
+
+[[events]]
+id = "tasks.changed"
+
+[[events]]
+id = "tasks.streak_milestone"
+
+[[reactions]]
+on = "tasks.created"
+animation = "happy_small"
+intensity = "small"
+microcopy = "tasks.created"
+
+[[reactions]]
+on = "tasks.completed"
+animation = "celebrate"
+intensity = "small"
+microcopy = "tasks.completed"
