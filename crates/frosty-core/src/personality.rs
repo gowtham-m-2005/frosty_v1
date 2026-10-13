@@ -17,6 +17,9 @@ pub const CELEBRATE_COOLDOWN_MS: u64 = 10_000;
 
 /// Marker for "use the event's own name as the microcopy key".
 const EVENT_KEY: &str = "{event}";
+/// Marker for "use the event payload's `text` field as the line". Used for
+/// notifications, whose wording comes from the capability, not a pack.
+const PAYLOAD_TEXT: &str = "{text}";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReactionRule {
@@ -103,6 +106,7 @@ pub fn core_rules() -> Vec<ReactionRule> {
             true,
         ),
         R::core("core.quit", "bye", 0.4, Some("quit"), false),
+        R::core("core.notification", "nudge", 0.6, Some(PAYLOAD_TEXT), true),
     ]
 }
 
@@ -349,6 +353,11 @@ impl PersonalityEngine {
             }
         });
         let text = match (&key, show_chip) {
+            (Some(key), true) if key == PAYLOAD_TEXT => event
+                .payload
+                .get("text")
+                .and_then(|t| t.as_str())
+                .map(str::to_string),
             (Some(key), true) => self.pick_text(key, &event.payload),
             _ => None,
         };
@@ -521,6 +530,17 @@ mod tests {
         let mut e = PersonalityEngine::new(Tone::Casual, ReactionLevel::Full, pack);
         let r = play(e.handle(&event("tasks.created"), 0));
         assert_eq!(r.text.as_deref(), Some("yes boss."));
+    }
+
+    #[test]
+    fn notifications_use_the_text_the_capability_supplied() {
+        let mut e = engine(Tone::Casual, ReactionLevel::Full);
+        let r = play(e.handle(
+            &Event::new("core.notification", json!({ "text": "Water the plants" })),
+            0,
+        ));
+        assert_eq!(r.animation.as_deref(), Some("nudge"));
+        assert_eq!(r.text.as_deref(), Some("Water the plants"));
     }
 
     #[test]

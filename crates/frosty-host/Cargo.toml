@@ -7,6 +7,17 @@ publish.workspace = true
 
 [dependencies]
 frosty-core.workspace = true
+jsonschema = { version = "0.58.6", default-features = false }
+rusqlite = "0.40.2"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror = "2.0.21"
+toml = "1.1.8"
+toml_edit = "0.25.17"
+uuid = { version = "1.28.0", features = ["v7"] }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"

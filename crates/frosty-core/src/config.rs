@@ -385,7 +385,13 @@ impl ConfigStore {
         if let Some(Item::Value(old)) = table.get(last) {
             *value.decor_mut() = old.decor().clone();
         }
-        table.insert(last, Item::Value(value));
+        // Replace in place so the key keeps its leading comment.
+        match table.get_mut(last) {
+            Some(slot) => *slot = Item::Value(value),
+            None => {
+                table.insert(last, Item::Value(value));
+            }
+        }
 
         let new_text = doc.to_string();
         let next = parse(&new_text)?;

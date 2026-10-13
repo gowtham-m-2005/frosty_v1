@@ -26,9 +26,10 @@ pub struct Migration {
 
 pub const CORE_OWNER: &str = "core";
 
-pub const CORE_MIGRATIONS: &[Migration] = &[Migration {
-    version: "0001_core",
-    sql: "
+pub const CORE_MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: "0001_core",
+        sql: "
         CREATE TABLE device (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -40,7 +41,63 @@ pub const CORE_MIGRATIONS: &[Migration] = &[Migration {
             updated_at INTEGER NOT NULL
         );
     ",
-}];
+    },
+    Migration {
+        version: "0002_scheduler_notifications",
+        sql: "
+        CREATE TABLE scheduler_jobs (
+            id TEXT PRIMARY KEY,
+            owner TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            fire_at INTEGER NOT NULL,
+            interval_ms INTEGER,
+            action TEXT NOT NULL,
+            missed_policy TEXT NOT NULL DEFAULT 'fire_once_on_start',
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX scheduler_jobs_due ON scheduler_jobs (fire_at);
+        CREATE TABLE notifications (
+            id TEXT PRIMARY KEY,
+            owner TEXT NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            read_at INTEGER,
+            dismissed_at INTEGER
+        );
+        CREATE TABLE capability_state (
+            id TEXT PRIMARY KEY,
+            installed_version TEXT,
+            state TEXT NOT NULL,
+            last_error TEXT,
+            error_count INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL
+        );
+    ",
+    },
+];
+
+/// Columns every capability table must carry so its rows can sync later
+/// (docs/PROJECT_SPEC.md 7.2 and 15).
+pub const SYNC_COLUMNS: [&str; 5] = ["id", "created_at", "updated_at", "deleted_at", "device_id"];
+
+#[derive(Debug, thiserror::Error)]
+pub enum CapabilityMigrationError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error("migration {version} failed: {message}")]
+    Sql { version: String, message: String },
+    #[error(
+        "migration {version} touches `{object}`, which is outside this capability. Its objects must start with `{prefix}`."
+    )]
+    OutsideNamespace {
+        version: String,
+        object: String,
+        prefix: String,
+    },
+    #[error("table `{table}` is missing required column `{column}`")]
+    MissingSyncColumn { table: String, column: String },
+}
 
 fn now_millis() -> i64 {
     SystemTime::now()
@@ -137,6 +194,150 @@ impl Database {
         }
         tx.commit()?;
         Ok(pending.len())
+    }
+
+    /// Applies a capability's own migrations. Beyond `run_migrations`, this
+    /// guarantees the capability stays inside its namespace: every object it
+    /// creates must belong to a `cap_<id>_` table, nothing else in the
+    /// database may change, and new tables must carry the sync columns.
+    /// Any violation rolls the whole batch back.
+    pub fn run_capability_migrations(
+        &mut self,
+        capability_id: &str,
+        migrations: &[(String, String)],
+    ) -> Result<usize, CapabilityMigrationError> {
+        let owner = format!("cap:{capability_id}");
+        let prefix = format!("cap_{capability_id}_");
+        let applied = self.applied(&owner)?;
+        let mut pending: Vec<&(String, String)> = migrations
+            .iter()
+            .filter(|(version, _)| !applied.iter().any(|a| a == version))
+            .collect();
+        pending.sort_by(|a, b| a.0.cmp(&b.0));
+        if pending.is_empty() {
+            return Ok(0);
+        }
+
+        if let (Some(path), Some(dir)) = (&self.path, &self.backups_dir)
+            && path.exists()
+        {
+            fs::create_dir_all(dir).map_err(DbError::from)?;
+            let name = format!("frosty-db-{:016}.db", now_millis());
+            fs::copy(path, dir.join(name)).map_err(DbError::from)?;
+        }
+
+        let snapshot = |conn: &Connection| -> Result<Vec<(String, String, String)>, DbError> {
+            let mut stmt = conn.prepare(
+                "SELECT name, tbl_name, COALESCE(sql, '') FROM sqlite_master ORDER BY name",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+            Ok(rows.collect::<Result<_, _>>()?)
+        };
+
+        let tx = self.conn.transaction().map_err(DbError::from)?;
+        let before = snapshot(&tx)?;
+
+        for (version, sql) in &pending {
+            tx.execute_batch(sql)
+                .map_err(|e| CapabilityMigrationError::Sql {
+                    version: version.clone(),
+                    message: e.to_string(),
+                })?;
+            let after = snapshot(&tx)?;
+            for (name, tbl_name, sql) in &after {
+                let existed = before.iter().any(|(n, _, s)| n == name && s == sql);
+                if !existed && !tbl_name.starts_with(&prefix) {
+                    return Err(CapabilityMigrationError::OutsideNamespace {
+                        version: version.clone(),
+                        object: name.clone(),
+                        prefix,
+                    });
+                }
+            }
+            // Dropping or altering someone else's object also shows up as a
+            // missing (name, sql) pair.
+            for (name, tbl_name, sql) in &before {
+                if tbl_name.starts_with(&prefix) {
+                    continue;
+                }
+                if !after.iter().any(|(n, _, s)| n == name && s == sql) {
+                    return Err(CapabilityMigrationError::OutsideNamespace {
+                        version: version.clone(),
+                        object: name.clone(),
+                        prefix,
+                    });
+                }
+            }
+            tx.execute(
+                "INSERT INTO migrations (owner, version, applied_at) VALUES (?1, ?2, ?3)",
+                params![owner, version, now_millis()],
+            )
+            .map_err(DbError::from)?;
+        }
+
+        // Every table this capability owns must carry the sync columns.
+        let tables: Vec<String> = {
+            let mut stmt = tx
+                .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+                .map_err(DbError::from)?;
+            let names: Vec<String> = stmt
+                .query_map([], |r| r.get::<_, String>(0))
+                .map_err(DbError::from)?
+                .collect::<Result<_, _>>()
+                .map_err(DbError::from)?;
+            names
+                .into_iter()
+                .filter(|n| n.starts_with(&prefix))
+                .collect()
+        };
+        for table in tables {
+            let columns: Vec<String> = {
+                let mut stmt = tx
+                    .prepare(&format!("PRAGMA table_info(\"{table}\")"))
+                    .map_err(DbError::from)?;
+                stmt.query_map([], |r| r.get::<_, String>(1))
+                    .map_err(DbError::from)?
+                    .collect::<Result<_, _>>()
+                    .map_err(DbError::from)?
+            };
+            for required in SYNC_COLUMNS {
+                if !columns.iter().any(|c| c == required) {
+                    return Err(CapabilityMigrationError::MissingSyncColumn {
+                        table,
+                        column: required.to_string(),
+                    });
+                }
+            }
+        }
+
+        tx.commit().map_err(DbError::from)?;
+        Ok(pending.len())
+    }
+
+    /// Drops every table a capability owns and forgets its migration history.
+    /// Used by "remove and delete data".
+    pub fn drop_capability_data(&mut self, capability_id: &str) -> Result<(), DbError> {
+        let prefix = format!("cap_{capability_id}_");
+        let tables: Vec<String> = {
+            let mut stmt = self
+                .conn
+                .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")?;
+            stmt.query_map([], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .filter(|n| n.starts_with(&prefix))
+                .collect()
+        };
+        let tx = self.conn.transaction()?;
+        for table in tables {
+            tx.execute_batch(&format!("DROP TABLE \"{table}\""))?;
+        }
+        tx.execute(
+            "DELETE FROM migrations WHERE owner = ?1",
+            [format!("cap:{capability_id}")],
+        )?;
+        tx.commit()?;
+        Ok(())
     }
 
     fn all_applied_is_empty(&self) -> Result<bool, DbError> {
@@ -271,5 +472,97 @@ mod tests {
             db.run_migrations("t", &m).unwrap();
         }
         assert_eq!(fs::read_dir(&backups).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn capability_migrations_create_namespaced_tables() {
+        let mut db = Database::open_in_memory().unwrap();
+        let m = vec![(
+            "0001".to_string(),
+            "CREATE TABLE cap_notes_items (
+                id TEXT PRIMARY KEY, created_at INTEGER, updated_at INTEGER,
+                deleted_at INTEGER, device_id TEXT, title TEXT);
+             CREATE INDEX cap_notes_items_title ON cap_notes_items (title);"
+                .to_string(),
+        )];
+        assert_eq!(db.run_capability_migrations("notes", &m).unwrap(), 1);
+        assert_eq!(db.run_capability_migrations("notes", &m).unwrap(), 0);
+    }
+
+    #[test]
+    fn capability_cannot_create_tables_outside_its_namespace() {
+        let mut db = Database::open_in_memory().unwrap();
+        let m = vec![(
+            "0001".to_string(),
+            "CREATE TABLE evil (id TEXT);".to_string(),
+        )];
+        let err = db.run_capability_migrations("notes", &m).unwrap_err();
+        assert!(
+            matches!(err, CapabilityMigrationError::OutsideNamespace { .. }),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn capability_cannot_touch_core_or_other_capability_tables() {
+        let mut db = Database::open_in_memory().unwrap();
+        for sql in [
+            "DROP TABLE kv;",
+            "ALTER TABLE kv ADD COLUMN x TEXT;",
+            "DROP TABLE scheduler_jobs;",
+        ] {
+            let m = vec![("0001".to_string(), sql.to_string())];
+            assert!(db.run_capability_migrations("notes", &m).is_err(), "{sql}");
+        }
+        // Core is intact.
+        db.kv_set("still", "here").unwrap();
+    }
+
+    #[test]
+    fn capability_tables_need_sync_columns() {
+        let mut db = Database::open_in_memory().unwrap();
+        let m = vec![(
+            "0001".to_string(),
+            "CREATE TABLE cap_notes_items (id TEXT PRIMARY KEY, title TEXT);".to_string(),
+        )];
+        let err = db.run_capability_migrations("notes", &m).unwrap_err();
+        assert!(
+            matches!(err, CapabilityMigrationError::MissingSyncColumn { .. }),
+            "{err}"
+        );
+        // And nothing was left behind.
+        assert!(db.applied("cap:notes").unwrap().is_empty());
+    }
+
+    #[test]
+    fn dropping_capability_data_removes_only_its_tables() {
+        let mut db = Database::open_in_memory().unwrap();
+        let table = |id: &str| {
+            vec![(
+                "0001".to_string(),
+                format!(
+                    "CREATE TABLE cap_{id}_items (id TEXT PRIMARY KEY, created_at INTEGER,
+                      updated_at INTEGER, deleted_at INTEGER, device_id TEXT);"
+                ),
+            )]
+        };
+        db.run_capability_migrations("a", &table("a")).unwrap();
+        db.run_capability_migrations("b", &table("b")).unwrap();
+        db.drop_capability_data("a").unwrap();
+        let names: Vec<String> = {
+            let mut stmt = db
+                .connection()
+                .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+                .unwrap();
+            let all: Vec<String> = stmt
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect();
+            all.into_iter().filter(|n| n.starts_with("cap_")).collect()
+        };
+        assert_eq!(names, vec!["cap_b_items"]);
+        // The history is gone too, so a reinstall would migrate again.
+        assert_eq!(db.run_capability_migrations("a", &table("a")).unwrap(), 1);
     }
 }
