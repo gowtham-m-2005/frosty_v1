@@ -560,7 +560,9 @@ fn spawn_smoke_calls(app: &AppHandle) {
             log("cannot read the smoke calls file".into());
             return;
         };
-        let Ok(calls) = serde_json::from_str::<Vec<serde_json::Value>>(&text) else {
+        // Windows editors and PowerShell often add a byte order mark.
+        let text = text.trim_start_matches('\u{feff}');
+        let Ok(calls) = serde_json::from_str::<Vec<serde_json::Value>>(text) else {
             log("the smoke calls file is not a JSON list".into());
             return;
         };

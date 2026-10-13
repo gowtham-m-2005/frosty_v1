@@ -45,12 +45,15 @@ function Check($label, $condition) {
 function NowMs { [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() }
 
 function Query($sql) {
+    # The SQL goes through a file so quotes in it cannot break the script.
+    $sqlFile = Join-Path $home_dir "query.sql"
+    Set-Content -Path $sqlFile -Value $sql -Encoding utf8
     $code = @"
 import sqlite3, json
 db = sqlite3.connect(r'$home_dir\frosty.db')
 db.row_factory = sqlite3.Row
-rows = [dict(r) for r in db.execute(r'''$sql''')]
-print(json.dumps(rows))
+sql = open(r'$sqlFile', encoding='utf-8-sig').read()
+print(json.dumps([dict(r) for r in db.execute(sql)]))
 "@
     $json = $code | python -
     if (-not $json) { return @() }
@@ -90,13 +93,13 @@ Check "app stayed up" $first.Alive
 Check "task tools answered through the whole stack" ($first.Log -match "ok tasks.add" -and $first.Log -notmatch "err ")
 
 $n = Query "select title, state, actions, delivered_at from notifications where owner = 'tasks'"
-Check "the reminder was delivered" (($n | Where-Object { $_.title -eq "water plants" -and $_.state -eq "delivered" }).Count -eq 1)
+Check "the reminder was delivered" (@($n | Where-Object { $_.title -eq "water plants" -and $_.state -eq "delivered" }).Count -eq 1)
 $actions = ($n | Where-Object { $_.title -eq "water plants" }).actions
 Check "it carries Done and Snooze actions" ($actions -match "tasks.complete" -and $actions -match "tasks.snooze")
 
 $jobs = Query "select owner, action from scheduler_jobs"
-Check "the repeating task still has its reminder scheduled" (($jobs | Where-Object { $_.action -match "tasks.remind" }).Count -ge 1)
-Check "the fired reminder's job is gone" (($jobs | Where-Object { $_.action -match "water" }).Count -eq 0)
+Check "the repeating task still has its reminder scheduled" (@($jobs | Where-Object { $_.action -match "tasks.remind" }).Count -ge 1)
+Check "the fired reminder's job is gone" (@($jobs | Where-Object { $_.action -match "water" }).Count -eq 0)
 
 # ---- complete the repeating task: it must reopen, not finish -------------------
 $items = Query "select id, title, due_at, completed_at from cap_tasks_items where deleted_at is null"
@@ -121,24 +124,24 @@ $third = Run-App @(
     @{ tool = "tasks.add"; input = @{ title = "while dnd"; due_at = $now + 5000 } }
 ) 8
 $held = Query "select state, hold_reason from notifications where title = 'while dnd'"
-Check "with do not disturb on, the reminder was held" (($held | Where-Object { $_.state -eq "held" -and $_.hold_reason -eq "do_not_disturb" }).Count -eq 1)
+Check "with do not disturb on, the reminder was held" (@($held | Where-Object { $_.state -eq "held" -and $_.hold_reason -eq "do_not_disturb" }).Count -eq 1)
 
 $py = "import sqlite3; db = sqlite3.connect(r'$home_dir\frosty.db'); db.execute(""update kv set value = '0' where key = 'dnd.manual'""); db.commit()"
 $py | python -
 $fourth = Run-App @() 10
 $released = Query "select state, delivered_at from notifications where title = 'while dnd'"
-Check "after do not disturb ended, the held reminder was delivered" (($released | Where-Object { $_.state -eq "delivered" }).Count -eq 1)
+Check "after do not disturb ended, the held reminder was delivered" (@($released | Where-Object { $_.state -eq "delivered" }).Count -eq 1)
 
 # ---- 4: due while the app was closed -----------------------------------------
 $now = NowMs
 $fifth = Run-App @(
     @{ tool = "tasks.add"; input = @{ title = "missed while closed"; due_at = $now + 4000 } }
 ) 0 -KillEarly
-Start-Sleep -Seconds 7   # it comes due while the app is not running
+Start-Sleep -Seconds 70   # due while closed, and later than the 60 s a missed run needs to count as late
 $sixth = Run-App @() 8
 $late = Query "select title, body, state from notifications where title = 'missed while closed'"
-Check "a reminder that came due while closed was delivered at the next start" (($late | Where-Object { $_.state -eq "delivered" }).Count -eq 1)
-Check "it says it was due while Frosty was away" (($late | Where-Object { $_.body -match "while Frosty was away" }).Count -eq 1)
+Check "a reminder that came due while closed was delivered at the next start" (@($late | Where-Object { $_.state -eq "delivered" }).Count -eq 1)
+Check "it says it was due while Frosty was away" (@($late | Where-Object { $_.body -match "while Frosty was away" }).Count -eq 1)
 
 "home: $home_dir"
 if ($script:ok) { "SMOKE PASS" } else { "SMOKE FAIL"; exit 1 }

@@ -78,14 +78,14 @@ Every `ctx` call returns a promise and is checked in Rust against the manifest a
 
 | Call | Needs | Notes |
 |------|-------|-------|
-| `ctx.db.insert / get / query / update / softDelete` | `storage` | Structured, no raw SQL. Tables are `cap_<id>_<table>`; Frosty fills `id`, `created_at`, `updated_at`, `deleted_at`, `device_id`. Deletes are soft. |
+| `ctx.db.insert / get / query / update / softDelete / restore` | `storage` | Structured, no raw SQL. Tables are `cap_<id>_<table>`; Frosty fills `id`, `created_at`, `updated_at`, `deleted_at`, `device_id`. Deletes are soft. |
 | `ctx.events.emit(name, payload, significance?)` | | The event must be declared. Payload is validated against its schema. |
 | `ctx.events.subscribe(pattern, handler)` | `events_subscribe` for other namespaces | Your own namespace and `core.*` are always allowed. |
 | `ctx.tools.register(id, handler)` | | Only tools declared in the manifest are routable. |
 | `ctx.tools.call(tool, input)` | `tools_call` for other modules | Input is validated against the tool's schema. |
 | `ctx.views.setBadge(n)` | | The number on the dock icon. 0 hides it. |
-| `ctx.scheduler.at / every / cancel` | `scheduler` | Jobs fire an event or a tool call and survive restarts. Cancelled when the module is turned off. |
-| `ctx.notify(title, body?)` | `notifications` | Frosty appears and nudges. |
+| `ctx.scheduler.at / every / cancel` | `scheduler` | Jobs fire an event or a tool call and survive restarts. Cancelled when the module is turned off. A run that is more than a minute late follows `missed`: `fire_once_on_start` (default, a tool call gets `late: true`), `skip`, or `fire_all` (replays a recurring job's missed runs, at most 10). |
+| `ctx.notify(title, body?, { actions })` | `notifications` | Frosty appears and nudges. Up to two `{ label, tool, input }` actions become buttons; each runs one of your tools. It may be held for do-not-disturb or while a fullscreen app is open, and the user can mute your module. |
 | `ctx.config.get / onChange` | | The module's settings, with schema defaults applied. |
 | `ctx.log.info / warn / error` | | Written to `logs/capabilities.log`. |
 
@@ -114,7 +114,9 @@ Rules (DESIGN_SPEC.md 7.2):
 - Do not open extra windows.
 - A crashing view is contained: the card is replaced by an error panel with **Copy details** and **Turn off this module**, and the rest of Frosty keeps running.
 
-Slots in v1: `card` (opens beside the fox) and `page` (the fullscreen module page; falls back to `card`). `widget` and quick actions arrive with the home dashboard.
+Slots in v1: `card` (opens beside the fox) and `page` (the fullscreen module page; falls back to `card`). `widget` arrives with the home dashboard.
+
+**Quick actions.** A tool with `quick_action = true` gets a small `+` beside its dock icon that opens a one-line control above the dock. `quick_action_control` picks it: `text`, `stepper`, `toggle`, or `button`. The control fills the first required property in the tool's input schema, so a quick action tool should have one obvious field. After it runs, focus goes back to the app the user was in.
 
 ## Settings
 
@@ -142,6 +144,10 @@ Plain SQL in `migrations/`, applied once in file-name order. Rules, enforced by 
 Permissions are shown in plain language when a user turns a module on, and stored in `frosty.toml`. The host enforces them on every call, and the webviews run under a content security policy that blocks direct network access and loading code from other origins.
 
 v1 treats capability code as **trusted local code**: permissions are a safety net and a clarity tool, not a sandbox. Only install modules you trust. Real sandboxing is a later phase.
+
+## A worked example: Tasks
+
+`capabilities/tasks` is a real module built only on this SDK: reminders through `ctx.scheduler.at` and `ctx.notify` with Done and Snooze actions, repeating tasks that reopen at the next slot, a streak computed from its own completion table, and delete with undo using `softDelete` and `restore`. Its pure logic (`recurrence.ts`, `streak.ts`) is separate from the tools so it can be tested without any host, and `src/testing.ts` is an in-memory stand-in for the core that you can copy.
 
 ## Testing
 

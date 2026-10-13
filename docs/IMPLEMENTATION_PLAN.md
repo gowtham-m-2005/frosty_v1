@@ -40,6 +40,16 @@ Phase 2 (capability system), updated 2026-10-14:
 | M2.4 Settings forms and module manager | Built, not hand-tested | Form generated from JSON Schema with all eleven field kinds, permission sheet with the second confirmation for shell, install from folder, remove with optional data delete, rejected-module list. Dock icons, badges, and cards beside the fox. |
 | M2.5 Scaffold, fixture, contract tests | Done | `tools/scaffold-capability`, the `hello` built-in, `docs/capability-authoring.md`, `tools/smoke/phase2.ps1`. |
 
+Phase 3 (Tasks and reminders), updated 2026-10-14:
+
+| Milestone | State | Notes |
+|-----------|-------|-------|
+| M3.1 Scheduler and notification center | Built, partly verified | Missed-job policies (fire once, skip, fire all with a cap), do-not-disturb schedule and manual switch, per-module mute, rate limit, held queue with history, nudge with up to two actions, 20 second timeout, OS notification fallback. Verified end to end against the real app: delivery, holding and releasing under do-not-disturb, and a reminder missed while closed. Not verified: waiting while a real fullscreen game or video is in front (the detector is unit tested on rectangles only), and the on-screen look of the nudge. |
+| M3.2 Tasks capability | Built | Add, edit, complete, reopen, delete with undo, snooze, stats, daily and weekly repeats, due-date reminders, streak with milestones. Built on the public SDK only; nothing in the core mentions tasks. 62 unit tests. Views have not been hand-tested. |
+| M3.3 End-to-end test and dogfood | Scripted test done, dogfood not started | `tools/smoke/phase3.ps1` drives the real app through the tool path. The week of daily use is yours. The plan's `tauri-driver` UI test is not built; the smoke script covers the logic path, not clicks. |
+
+Phase 3 exit check: "reminders fire when Frosty is hidden" and "nothing in core special-cases Tasks" are verified (smoke test, and a search of `apps/` and `crates/` for the capability id). "Used for a week" is not done.
+
 Phase 2 exit check: a deliberately broken capability showing an error while the shell survives is verified by `tools/smoke/phase2.ps1` against the real app (a module whose `onActivate` throws and one with a bad manifest, alongside a healthy one). Enabling a capability from the module manager UI and seeing its dock icon, card, and settings form is built but has not been exercised by hand.
 
 ## 1. Scope

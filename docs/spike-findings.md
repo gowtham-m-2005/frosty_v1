@@ -35,6 +35,8 @@ Decision needed in Phase 3 (not blocking Phase 1). Options, in order of preferen
 1. Do not ask the OS. Compare the foreground window's rectangle to its monitor, excluding Frosty's own windows. Needs a short test over a borderless game and a fullscreen video.
 2. Query `SHQueryUserNotificationState` only while the overlay is hidden, and remember the answer for as long as it stays visible. Cheap, but it cannot notice a game launching while Frosty is up.
 
+**Resolved in Phase 3.** The app now decides fullscreen by comparing the foreground window with its monitor, ignoring Frosty's own windows, the desktop, and the taskbar, and treating a window with a title bar as a normal maximized window (`apps/desktop/src-tauri/src/fullscreen.rs`). The rectangle logic is unit tested. Not yet tried against a real borderless game, an exclusive fullscreen game, or a fullscreen browser video; a browser in F11 mode may keep a title bar style and so not be detected.
+
 ### Click-through method: use the window region, not polling (confirmed)
 
 | Method | Idle process CPU (overlay visible, over a fullscreen video) |
