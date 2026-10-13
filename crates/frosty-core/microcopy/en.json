@@ -1,6 +1,10 @@
 {
   "casual": {
-    "summon.first_today": ["hey, you're back.", "oh, hi again.", { "text": "morning. or whatever it is.", "weight": 1 }],
+    "summon.first_today": [
+      "hey, you're back.",
+      "oh, hi again.",
+      { "text": "morning. or whatever it is.", "weight": 1 }
+    ],
     "tasks.created": ["got it.", "noted.", "on the list."],
     "tasks.completed": ["nice, one down.", "one less thing.", "done and dusted."],
     "reminder.due": ["psst, time for {title}.", "hey, {title}.", "{title}. now's good."],

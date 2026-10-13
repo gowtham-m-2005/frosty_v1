@@ -280,6 +280,31 @@ pub fn parse(text: &str) -> Result<FrostyConfig, ConfigError> {
     Ok(cfg)
 }
 
+fn json_to_toml(value: &serde_json::Value) -> Result<Value, ConfigError> {
+    use serde_json::Value as J;
+    Ok(match value {
+        J::String(s) => Value::from(s.as_str()),
+        J::Bool(b) => Value::from(*b),
+        J::Number(n) => match (n.as_i64(), n.as_f64()) {
+            (Some(i), _) => Value::from(i),
+            (None, Some(f)) => Value::from(f),
+            _ => return Err(ConfigError::Edit(format!("unsupported number {n}"))),
+        },
+        J::Array(items) => {
+            let mut array = toml_edit::Array::new();
+            for item in items {
+                array.push(json_to_toml(item)?);
+            }
+            Value::from(array)
+        }
+        other => {
+            return Err(ConfigError::Edit(format!(
+                "unsupported value {other}, expected a string, number, boolean, or list"
+            )));
+        }
+    })
+}
+
 pub struct ConfigStore {
     path: PathBuf,
     backups_dir: PathBuf,
@@ -371,6 +396,12 @@ impl ConfigStore {
         fs::rename(&tmp, &self.path)?;
         self.current = next;
         Ok(())
+    }
+
+    /// Same as `set`, taking a JSON value from the UI. Strings, booleans,
+    /// numbers, and arrays of those are supported.
+    pub fn set_json(&mut self, key: &str, value: &serde_json::Value) -> Result<(), ConfigError> {
+        self.set(key, json_to_toml(value)?)
     }
 
     fn backup(&self, previous_text: &str) -> Result<(), ConfigError> {

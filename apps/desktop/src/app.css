@@ -1,0 +1,171 @@
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Overlay: transparent, the fox and dock sit bottom right. */
+html[data-window="overlay"],
+html[data-window="overlay"] body {
+  background: transparent;
+  overflow: hidden;
+}
+.overlay-root {
+  position: fixed;
+  inset: 0;
+}
+.overlay-stack {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.overlay-fox {
+  cursor: grab;
+  touch-action: none;
+}
+.overlay-fox:active {
+  cursor: grabbing;
+}
+.overlay-chip {
+  pointer-events: none;
+}
+
+.dock {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  height: 40px;
+  box-sizing: content-box;
+  border: var(--border-width) solid var(--border);
+  border-radius: calc(28px * var(--radius-scale));
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+  backdrop-filter: var(--surface-blur);
+}
+.dock-button {
+  width: 40px;
+  height: 40px;
+  font: inherit;
+  font-size: 18px;
+  border: var(--border-width) solid transparent;
+  border-radius: calc(20px * var(--radius-scale));
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.dock-button:hover {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* Main window. */
+.main-shell {
+  display: flex;
+  height: 100%;
+}
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 120px;
+  padding: 16px 12px;
+  box-sizing: border-box;
+  border-right: var(--border-width) solid var(--border);
+  background: var(--surface);
+}
+.rail-fox {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.rail-button {
+  font: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  border: var(--border-width) solid transparent;
+  border-radius: calc(8px * var(--radius-scale));
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.rail-button:hover {
+  background: var(--bg);
+}
+.rail-button[aria-current="page"] {
+  background: var(--accent);
+  color: var(--accent-on);
+}
+.main-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 24px;
+  border-bottom: var(--border-width) solid var(--border);
+}
+.topbar h1 {
+  margin: 0;
+  font: 600 20px var(--font-display);
+}
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+  max-width: 1200px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 48px 0;
+}
+.empty-state h2 {
+  margin: 0;
+  font: 600 24px var(--font-display);
+}
+.muted {
+  color: var(--text-muted);
+}
+.settings section {
+  margin-bottom: 32px;
+}
+.settings h2,
+.debug h2 {
+  font: 600 16px var(--font-display);
+  margin: 0 0 4px;
+}
+.debug-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.debug-custom {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+.debug-custom .f-input:nth-child(2) {
+  flex: 1;
+}
+.debug-log {
+  padding-left: 20px;
+  line-height: 1.8;
+}

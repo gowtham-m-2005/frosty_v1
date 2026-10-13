@@ -1,0 +1,305 @@
+/* Placeholder fox. Flat shapes, transform and opacity only. */
+
+.fox {
+  --fox-fur-color: #f4f9fc;
+  --fox-line: #1b3447;
+  --fox-warm: #f5913a;
+  display: inline-block;
+  line-height: 0;
+  user-select: none;
+}
+
+.fox svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.fox-fur {
+  fill: var(--fox-fur-color);
+  stroke: var(--fox-line);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.fox-tip,
+.fox-eye,
+.fox-nose {
+  fill: var(--fox-line);
+}
+.fox-ear-inner {
+  fill: var(--fox-line);
+  opacity: 0.55;
+}
+.fox-scarf {
+  fill: var(--fox-warm);
+  stroke: var(--fox-line);
+  stroke-width: 1.5;
+}
+
+.fox-motion,
+.fox-head,
+.fox-tail,
+.fox-body,
+.fox-eye,
+.fox-ear-twitch {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+.fox-motion {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+}
+.fox-head {
+  transform-origin: 50% 90%;
+}
+.fox-tail {
+  transform-origin: 0% 100%;
+}
+.fox-eye {
+  transform-origin: center;
+}
+
+/* Idle loops. Paused when the fox is not visible. */
+.fox-body {
+  animation: fox-breathe 3.6s ease-in-out infinite;
+}
+.fox-eye {
+  animation: fox-blink 5.5s ease-in-out infinite;
+}
+.fox-ear-twitch {
+  animation: fox-ear 9s ease-in-out infinite;
+}
+.fox-tail {
+  animation: fox-flick 13s ease-in-out infinite;
+}
+.fox[data-visible="false"] * {
+  animation-play-state: paused !important;
+}
+
+@keyframes fox-breathe {
+  50% {
+    transform: scaleY(1.025);
+  }
+}
+@keyframes fox-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes fox-ear {
+  0%,
+  90%,
+  100% {
+    transform: rotate(0);
+  }
+  94% {
+    transform: rotate(8deg);
+  }
+}
+@keyframes fox-flick {
+  0%,
+  88%,
+  100% {
+    transform: rotate(0);
+  }
+  93% {
+    transform: rotate(10deg);
+  }
+}
+
+/* Transitions and reactions. Amplitude follows --intensity (0 to 1). */
+.fox[data-state="summon_in"] .fox-motion {
+  animation: fox-summon 480ms cubic-bezier(0.2, 1.2, 0.3, 1) both;
+}
+.fox[data-state="dismiss_out"] .fox-motion {
+  animation: fox-dismiss 280ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+.fox[data-state="mode_expand"] .fox-motion {
+  animation: fox-shrink 320ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+.fox[data-state="mode_collapse"] .fox-motion {
+  animation: fox-grow 320ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+.fox[data-state="wave"] .fox-head,
+.fox[data-state="bye"] .fox-head {
+  animation: fox-wave 1000ms ease-in-out both;
+}
+.fox[data-state="happy_small"] .fox-tail {
+  animation: fox-wag 800ms ease-in-out both;
+}
+.fox[data-state="celebrate"] .fox-motion {
+  animation: fox-jump 1100ms cubic-bezier(0.3, 0, 0.3, 1) both;
+}
+.fox[data-state="curious_tilt"] .fox-head {
+  animation: fox-tilt 1200ms ease-in-out both;
+}
+.fox[data-state="nudge"] .fox-motion {
+  animation: fox-hop 1200ms ease-in-out both;
+}
+.fox[data-state="sleepy"] .fox-motion {
+  transform: translateY(calc(var(--intensity) * 6px));
+  transition: transform 600ms;
+}
+.fox[data-state="sleepy"] .fox-eye {
+  animation: none;
+  transform: scaleY(0.15);
+}
+.fox[data-state="oops"] .fox-motion {
+  animation: fox-shake 600ms linear both;
+}
+.fox[data-state="thinking"] .fox-head {
+  animation: fox-think 1600ms ease-in-out infinite;
+}
+
+@keyframes fox-summon {
+  from {
+    opacity: 0;
+    transform: translateY(48px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fox-dismiss {
+  to {
+    opacity: 0;
+    transform: translateY(48px) scale(0.85);
+  }
+}
+@keyframes fox-shrink {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(0.7);
+  }
+}
+@keyframes fox-grow {
+  from {
+    transform: scale(0.7);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes fox-wave {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(calc(var(--intensity) * -14deg - 4deg));
+  }
+  50% {
+    transform: rotate(calc(var(--intensity) * 14deg + 4deg));
+  }
+  75% {
+    transform: rotate(calc(var(--intensity) * -10deg));
+  }
+}
+@keyframes fox-wag {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20%,
+  60% {
+    transform: rotate(calc(var(--intensity) * 30deg + 8deg));
+  }
+  40%,
+  80% {
+    transform: rotate(calc(var(--intensity) * -12deg));
+  }
+}
+@keyframes fox-jump {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  20% {
+    transform: translateY(0) scale(1.06, 0.92);
+  }
+  45% {
+    transform: translateY(calc(var(--intensity) * -34px - 10px)) scale(0.96, 1.06);
+  }
+  70% {
+    transform: translateY(0) scale(1.05, 0.94);
+  }
+}
+@keyframes fox-tilt {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  30%,
+  70% {
+    transform: rotate(calc(var(--intensity) * 14deg + 6deg));
+  }
+}
+@keyframes fox-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  20% {
+    transform: translateY(calc(var(--intensity) * -18px - 4px));
+  }
+  40% {
+    transform: translateY(0);
+  }
+  60% {
+    transform: translateY(calc(var(--intensity) * -12px - 3px));
+  }
+  80% {
+    transform: translateY(0);
+  }
+}
+@keyframes fox-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(calc(var(--intensity) * -6px - 2px));
+  }
+  40%,
+  80% {
+    transform: translateX(calc(var(--intensity) * 6px + 2px));
+  }
+}
+@keyframes fox-think {
+  0%,
+  100% {
+    transform: rotate(-6deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-9deg) translateY(-1px);
+  }
+}
+
+/* Reduced motion: a brief fade and a static pose, no looping and no bursts. */
+[data-reduced-motion="true"] .fox *,
+[data-reduced-motion="true"] .fox {
+  animation: none !important;
+  transition: none !important;
+}
+[data-reduced-motion="true"] .fox[data-state="dismiss_out"] .fox-motion {
+  opacity: 0;
+}
+[data-reduced-motion="true"] .fox[data-state="curious_tilt"] .fox-head {
+  transform: rotate(10deg);
+}
+[data-reduced-motion="true"] .fox[data-state="sleepy"] .fox-eye {
+  transform: scaleY(0.15);
+}
+[data-reduced-motion="true"] .fox[data-state="oops"] .fox-head {
+  transform: rotate(-6deg);
+}

@@ -1,0 +1,175 @@
+/* Shared styles. Colors come from theme tokens only (docs/DESIGN_SPEC.md 7.2). */
+
+:root {
+  --font-body: "Inter", system-ui, "Segoe UI", sans-serif;
+  --radius-scale: 1;
+  --border-width: 1px;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  --surface-blur: none;
+  --font-display: var(--font-body);
+
+  /* Fallbacks until the first theme resolves. */
+  --bg: #f4f9fc;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --border: #d5e4ee;
+  --text: #1b2a35;
+  --text-muted: #5c7384;
+  --accent: #f5913a;
+  --accent-on: #1b1206;
+  --focus-ring: #4f92c0;
+  --success: #3fae7a;
+  --warning: #e3a02b;
+  --danger: #d9534f;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 var(--font-body);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.f-button {
+  font: inherit;
+  padding: 6px 14px;
+  border: var(--border-width) solid var(--border);
+  border-radius: calc(8px * var(--radius-scale));
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.f-button:hover {
+  border-color: var(--text-muted);
+}
+.f-button-primary {
+  background: var(--accent);
+  color: var(--accent-on);
+  border-color: var(--accent);
+}
+.f-button-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.f-button-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.f-toggle {
+  width: 40px;
+  height: 22px;
+  padding: 2px;
+  border: var(--border-width) solid var(--border);
+  border-radius: calc(11px * var(--radius-scale));
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+}
+.f-toggle[aria-checked="true"] {
+  background: var(--accent);
+  text-align: right;
+}
+.f-toggle-knob {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: calc(8px * var(--radius-scale));
+  background: var(--text);
+}
+.f-toggle[aria-checked="true"] .f-toggle-knob {
+  background: var(--accent-on);
+}
+
+.f-segmented {
+  display: inline-flex;
+}
+.f-segment {
+  font: inherit;
+  padding: 6px 12px;
+  border: var(--border-width) solid var(--border);
+  margin-left: calc(-1 * var(--border-width));
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.f-segment:first-child {
+  margin-left: 0;
+  border-radius: calc(8px * var(--radius-scale)) 0 0 calc(8px * var(--radius-scale));
+}
+.f-segment:last-child {
+  border-radius: 0 calc(8px * var(--radius-scale)) calc(8px * var(--radius-scale)) 0;
+}
+.f-segment[aria-checked="true"] {
+  background: var(--accent);
+  color: var(--accent-on);
+  border-color: var(--accent);
+  position: relative;
+}
+
+.f-select,
+.f-input {
+  font: inherit;
+  padding: 6px 10px;
+  border: var(--border-width) solid var(--border);
+  border-radius: calc(8px * var(--radius-scale));
+  background: var(--surface);
+  color: var(--text);
+}
+
+.f-banner {
+  padding: 10px 14px;
+  border: var(--border-width) solid var(--border);
+  border-left-width: 4px;
+  border-radius: calc(8px * var(--radius-scale));
+  background: var(--surface);
+}
+.f-banner-error {
+  border-left-color: var(--danger);
+}
+.f-banner-info {
+  border-left-color: var(--focus-ring);
+}
+
+.f-chip {
+  max-width: 240px;
+  padding: 8px 12px;
+  border: var(--border-width) solid var(--border);
+  border-radius: calc(12px * var(--radius-scale));
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-family: var(--font-display);
+  backdrop-filter: var(--surface-blur);
+}
+
+.f-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: var(--border-width) solid var(--border);
+}
+.f-field-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.f-field-hint {
+  color: var(--text-muted);
+}
+.f-field-key {
+  color: var(--text-muted);
+  font-size: 12px;
+}
