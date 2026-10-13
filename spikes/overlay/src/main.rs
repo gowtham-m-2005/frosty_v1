@@ -109,6 +109,14 @@ fn notification_state() -> String {
 
 fn main() {
     let selftest = std::env::args().any(|a| a == "--selftest");
+    if std::env::args().any(|a| a == "--probe") {
+        // Control run: no window at all, just log the fullscreen state.
+        for _ in 0..8 {
+            log(&format!("probe (no overlay): {}", notification_state()));
+            thread::sleep(Duration::from_secs(1));
+        }
+        return;
+    }
     let rects = Arc::new(HitRects::default());
 
     tauri::Builder::default()
