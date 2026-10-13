@@ -1,0 +1,21 @@
+[package]
+name = "spike-overlay"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Throwaway spike: its own workspace so CI lints and the real build ignore it.
+[workspace]
+
+[build-dependencies]
+tauri-build = "2"
+
+[dependencies]
+tauri = "2"
+serde = { version = "1", features = ["derive"] }
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Shell",
+  "Win32_System_Threading",
+] }

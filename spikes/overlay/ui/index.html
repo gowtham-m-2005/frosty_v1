@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font: 12px sans-serif;
+      }
+      .box {
+        position: fixed;
+        right: 24px;
+        box-sizing: border-box;
+        border: 2px solid #1b3447;
+        color: #1b3447;
+      }
+      #fox {
+        bottom: 96px;
+        width: 160px;
+        height: 160px;
+        background: #f5913a;
+      }
+      #dock {
+        bottom: 32px;
+        width: 240px;
+        height: 56px;
+        background: #cce3f1;
+      }
+      #card {
+        bottom: 96px;
+        right: 200px;
+        width: 380px;
+        height: 520px;
+        background: #f4f9fc;
+      }
+      #status {
+        position: fixed;
+        left: 8px;
+        top: 8px;
+        color: #fff;
+        background: #000a;
+        padding: 4px 6px;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">overlay spike</div>
+    <div id="card" class="box">card</div>
+    <div id="fox" class="box">fox</div>
+    <div id="dock" class="box">dock</div>
+    <script>
+      const invoke = window.__TAURI__.core.invoke;
+      function report() {
+        const rects = [...document.querySelectorAll(".box")].map((el) => {
+          const r = el.getBoundingClientRect();
+          return { id: el.id, x: r.x, y: r.y, w: r.width, h: r.height };
+        });
+        invoke("set_hit_rects", { rects });
+      }
+      window.addEventListener("resize", report);
+      report();
+      window.__TAURI__.event.listen("spike-status", (e) => {
+        document.getElementById("status").textContent = e.payload;
+      });
+    </script>
+  </body>
+</html>
