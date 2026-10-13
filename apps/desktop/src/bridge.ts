@@ -63,6 +63,43 @@ export interface DecisionPayload {
   decision: Decision;
 }
 
+export type CapabilityState = "disabled" | "enabling" | "enabled" | "error";
+
+export interface PermissionLine {
+  key: string;
+  text: string;
+  sensitive: boolean;
+}
+
+export interface CapabilityInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  runtime: string;
+  origin: "built_in" | "user";
+  state: CapabilityState;
+  error: string | null;
+  error_count: number;
+  tools: {
+    id: string;
+    title: string;
+    quick_action: boolean;
+    quick_action_control: string | null;
+  }[];
+  permissions: PermissionLine[];
+  has_settings: boolean;
+  entry_url: string;
+  views_url: string | null;
+  icon_url: string | null;
+  badge: number;
+}
+
+export interface CapabilityList {
+  capabilities: CapabilityInfo[];
+  rejected: { dir: string; errors: string[] }[];
+}
+
 export interface HitRect {
   x: number;
   y: number;
@@ -87,6 +124,25 @@ export const api = {
   getFoxPosition: () => invoke<string | null>("get_fox_position"),
   saveFoxPosition: (position: string) => invoke<void>("save_fox_position", { position }),
   getPaths: () => invoke<Paths>("get_paths"),
+  listCapabilities: () => invoke<CapabilityList>("list_capabilities"),
+  enableCapability: (id: string, confirmedShell = false) =>
+    invoke<void>("enable_capability", { id, confirmedShell }),
+  disableCapability: (id: string) => invoke<void>("disable_capability", { id }),
+  capabilityFailed: (id: string, message: string) =>
+    invoke<void>("capability_failed", { id, message }),
+  rescanCapabilities: () => invoke<void>("rescan_capabilities"),
+  removeCapability: (id: string, deleteData: boolean) =>
+    invoke<void>("remove_capability", { id, deleteData }),
+  installCapabilityFromFolder: () => invoke<string | null>("install_capability_from_folder"),
+  capabilityReveal: (id: string, which: "folder" | "config") =>
+    invoke<void>("capability_reveal", { id, which }),
+  getCapabilitySchema: (id: string) => invoke<unknown>("get_capability_schema", { id }),
+  getCapabilitySettings: (id: string) =>
+    invoke<Record<string, unknown>>("get_capability_settings", { id }),
+  setCapabilitySettings: (id: string, values: Record<string, unknown>) =>
+    invoke<void>("set_capability_settings", { id, values }),
+  callTool: (tool: string, input: Record<string, unknown> = {}) =>
+    invoke<unknown>("call_tool", { tool, input }),
   reveal: (which: "home" | "config" | "themes") => invoke<void>("reveal", { which }),
 };
 

@@ -8,10 +8,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "build:capabilities": "pnpm --filter \"./capabilities/*\" build",
+    "scaffold": "node tools/scaffold-capability/scaffold.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "esbuild": "^0.28.2",
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "prettier": "^3.9.10",

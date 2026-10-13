@@ -282,6 +282,7 @@ fn sync_personality(state: &AppState) {
 
 pub fn emit_capabilities(app: &AppHandle) {
     sync_personality(&app.state::<AppState>());
+    persist_states(&app.state::<AppState>());
     let list = build_list(&app.state::<AppState>());
     let _ = app.emit("frosty://capabilities", list);
 }
@@ -402,6 +403,19 @@ pub fn capability_activated(
         }
     }
     if !ok {
+        let message = state
+            .registry
+            .lock()
+            .unwrap()
+            .get(&id)
+            .and_then(|e| e.error.clone())
+            .unwrap_or_default();
+        log_line(
+            &state,
+            "error",
+            &id,
+            &format!("activation failed: {message}"),
+        );
         let _ = scheduler::cancel_owner(&state.db.lock().unwrap(), &id);
         shell::publish(&app, "core.error", json!({ "capability": id }), None);
     }
@@ -411,6 +425,7 @@ pub fn capability_activated(
 /// A view crashed. The module goes to `error` and stops receiving calls.
 #[tauri::command]
 pub fn capability_failed(app: AppHandle, state: State<'_, AppState>, id: String, message: String) {
+    log_line(&state, "error", &id, &format!("view failed: {message}"));
     let _ = state.registry.lock().unwrap().mark_error(&id, message);
     let _ = app.emit_to(LOGIC, "frosty://capability-disable", json!({ "id": id }));
     shell::publish(&app, "core.error", json!({ "capability": id }), None);
@@ -952,8 +967,7 @@ pub fn cap_badge(app: AppHandle, state: State<'_, AppState>, capability: String,
     emit_capabilities(&app);
 }
 
-#[tauri::command]
-pub fn cap_log(state: State<'_, AppState>, capability: String, level: String, message: String) {
+fn log_line(state: &AppState, level: &str, capability: &str, message: &str) {
     use std::io::Write;
     let _ = fs::create_dir_all(state.home.logs_dir());
     if let Ok(mut file) = fs::OpenOptions::new()
@@ -962,6 +976,44 @@ pub fn cap_log(state: State<'_, AppState>, capability: String, level: String, me
         .open(state.home.logs_dir().join("capabilities.log"))
     {
         let _ = writeln!(file, "[{level}] {capability}: {message}");
+    }
+}
+
+#[tauri::command]
+pub fn cap_log(state: State<'_, AppState>, capability: String, level: String, message: String) {
+    log_line(&state, &level, &capability, &message);
+}
+
+/// Mirrors each capability's state into the `capability_state` table so
+/// errors survive a restart and can be inspected without the UI.
+fn persist_states(state: &AppState) {
+    let rows: Vec<(String, String, String, Option<String>, u32)> = {
+        let reg = state.registry.lock().unwrap();
+        reg.iter()
+            .map(|e| {
+                (
+                    e.loaded.id().to_string(),
+                    e.loaded.manifest.capability.version.clone(),
+                    format!("{:?}", e.state).to_lowercase(),
+                    e.error.clone(),
+                    e.error_count,
+                )
+            })
+            .collect()
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as i64);
+    let db = state.db.lock().unwrap();
+    for (id, version, st, error, count) in rows {
+        let _ = db.connection().execute(
+            "INSERT INTO capability_state (id, installed_version, state, last_error, error_count, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET installed_version = excluded.installed_version,
+               state = excluded.state, last_error = excluded.last_error,
+               error_count = excluded.error_count, updated_at = excluded.updated_at",
+            rusqlite::params![id, version, st, error, count, now],
+        );
     }
 }
 

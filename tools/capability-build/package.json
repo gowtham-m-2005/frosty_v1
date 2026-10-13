@@ -1,0 +1,7 @@
+{
+  "name": "@frosty/capability-build",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Builds a capability folder into dist/"
+}

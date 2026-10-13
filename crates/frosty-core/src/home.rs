@@ -17,7 +17,12 @@ impl FrostyHome {
     }
 
     /// The standard app-data folder: `%APPDATA%\frosty` on Windows.
+    /// `FROSTY_HOME` overrides it, which is how tests and demos run against a
+    /// throwaway home without touching real data.
     pub fn resolve() -> Self {
+        if let Some(custom) = std::env::var_os("FROSTY_HOME") {
+            return Self::new(PathBuf::from(custom));
+        }
         let base = std::env::var_os("APPDATA")
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))

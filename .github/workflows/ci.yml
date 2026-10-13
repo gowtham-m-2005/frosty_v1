@@ -31,6 +31,7 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm build:capabilities
       # The app crate embeds the frontend bundle, so it must exist before clippy.
       - run: pnpm --filter @frosty/desktop build
       - run: cargo clippy --workspace --all-targets -- -D warnings
@@ -54,5 +55,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
       # The app crate needs system webview libraries, so only the portable crates run here.
+      - run: pnpm build:capabilities
       - run: cargo test -p frosty-core -p frosty-host
       - run: pnpm test

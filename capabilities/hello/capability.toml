@@ -1,0 +1,48 @@
+[capability]
+id = "hello"
+name = "Hello"
+version = "0.1.0"
+api_version = "1"
+runtime = "ts"
+description = "A small example module that greets people. It shows how a module is put together."
+entry = "dist/index.js"
+views = "dist/views.js"
+icon = "assets/icon.svg"
+
+[permissions]
+storage = true
+
+[storage]
+migrations = "migrations/"
+
+[settings]
+schema = "settings.schema.json"
+
+[[tools]]
+id = "hello.greet"
+title = "Greet someone"
+input_schema = "schemas/greet.input.json"
+quick_action = true
+quick_action_control = "text"
+
+[[tools]]
+id = "hello.list"
+title = "List greetings"
+
+[[tools]]
+id = "hello.clear"
+title = "Clear greetings"
+
+[[tools]]
+id = "hello.ping"
+title = "Check that the module answers"
+
+[[events]]
+id = "hello.greeted"
+payload_schema = "schemas/greeted.json"
+
+[[reactions]]
+on = "hello.greeted"
+animation = "happy_small"
+intensity = "small"
+microcopy = "hello.greeted"

@@ -30,6 +30,18 @@ Updated 2026-10-14. "Built" means code exists and automated checks pass. "Verifi
 
 Phase 1 exit check is not met yet: it needs the hand tests listed in section 6.
 
+Phase 2 (capability system), updated 2026-10-14:
+
+| Milestone | State | Notes |
+|-----------|-------|-------|
+| M2.1 Manifest and host | Built | Manifest validation reports every problem; discovery over built-in and user roots; lifecycle registry; permission descriptions and checks enforced in Rust; failures isolated per capability. 35 unit tests plus 6 contract tests. |
+| M2.2 Storage, tools, events, scheduler core | Built | Namespaced migrations that cannot touch other tables, structured `ctx.db`, tool routing with input validation, event gating by namespace, persistent scheduler, minimal notify. Missed-job policies other than "fire once" are stored but not honoured yet (Phase 3). |
+| M2.3 SDK v1 | Built | `defineCapability`, `defineViews`, `ctx`, view hooks, logic host, React and JSX shims so a capability never bundles its own React. 12 host tests. `ctx.host.*` (clipboard, fs, shell, network) has no implementation behind it yet. |
+| M2.4 Settings forms and module manager | Built, not hand-tested | Form generated from JSON Schema with all eleven field kinds, permission sheet with the second confirmation for shell, install from folder, remove with optional data delete, rejected-module list. Dock icons, badges, and cards beside the fox. |
+| M2.5 Scaffold, fixture, contract tests | Done | `tools/scaffold-capability`, the `hello` built-in, `docs/capability-authoring.md`, `tools/smoke/phase2.ps1`. |
+
+Phase 2 exit check: a deliberately broken capability showing an error while the shell survives is verified by `tools/smoke/phase2.ps1` against the real app (a module whose `onActivate` throws and one with a bad manifest, alongside a healthy one). Enabling a capability from the module manager UI and seeing its dock icon, card, and settings form is built but has not been exercised by hand.
+
 ## 1. Scope
 
 | Track | Phases | Target |

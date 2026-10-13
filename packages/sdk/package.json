@@ -5,9 +5,17 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./views": "./src/views.ts",
+    "./host": "./src/host.ts",
+    "./react-shim": "./src/react-shim.ts",
+    "./jsx-runtime-shim": "./src/jsx-runtime-shim.ts"
   },
   "scripts": {
     "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "react": "^19.3.0"
   }
 }

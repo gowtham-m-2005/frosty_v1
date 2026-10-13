@@ -1,0 +1,8 @@
+{
+  "casual": {
+    "hello.greeted": ["said hi.", "greeting sent.", "waved for you."]
+  },
+  "neutral": {
+    "hello.greeted": ["Greeting sent.", "Greeting saved."]
+  }
+}

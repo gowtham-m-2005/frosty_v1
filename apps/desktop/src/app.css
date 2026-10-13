@@ -169,3 +169,125 @@ html[data-window="overlay"] body {
   padding-left: 20px;
   line-height: 1.8;
 }
+
+/* Dock icons and badges. */
+.dock-button {
+  position: relative;
+}
+.dock-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: 0 auto;
+  background: currentColor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+.dock-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: calc(8px * var(--radius-scale));
+  background: var(--accent);
+  color: var(--accent-on);
+  font-size: 11px;
+  line-height: 16px;
+}
+.overlay-card {
+  position: fixed;
+}
+.rail-badge {
+  color: inherit;
+  font-size: 12px;
+}
+
+/* Module manager. */
+.modules-toolbar {
+  display: flex;
+  gap: 8px;
+}
+.module-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.module-row {
+  padding: 16px 0;
+  border-bottom: var(--border-width) solid var(--border);
+}
+.module-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+}
+.module-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.module-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.tag {
+  padding: 1px 8px;
+  border: var(--border-width) solid var(--border);
+  border-radius: calc(10px * var(--radius-scale));
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.tag-enabled {
+  color: var(--text);
+  border-color: var(--success);
+}
+.tag-error {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.module-menu {
+  position: relative;
+}
+.module-menu summary {
+  cursor: pointer;
+  padding: 4px 8px;
+  list-style: none;
+}
+.module-menu div {
+  position: absolute;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px;
+  border: var(--border-width) solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+}
+.module-menu button {
+  font: inherit;
+  text-align: left;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.module-menu button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.module-settings,
+.module-remove,
+.module-error {
+  margin-top: 12px;
+}

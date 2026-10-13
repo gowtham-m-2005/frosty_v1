@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ComponentPropsWithRef, ReactNode } from "react";
 import { useId } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -8,7 +8,7 @@ export function Button({
   className = "",
   type = "button",
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
+}: ComponentPropsWithRef<"button"> & { variant?: ButtonVariant }) {
   return <button type={type} className={`f-button f-button-${variant} ${className}`} {...rest} />;
 }
 
@@ -152,5 +152,65 @@ export function Field({
         {children}
       </div>
     </div>
+  );
+}
+
+/** Replaces a capability's view when it crashes (docs/DESIGN_SPEC.md 14). */
+export function ErrorPanel({
+  title,
+  message,
+  onCopy,
+  onDisable,
+}: {
+  title: string;
+  message: string;
+  onCopy: () => void;
+  onDisable?: () => void;
+}) {
+  return (
+    <div role="alert" className="f-error-panel">
+      <h2>{title}</h2>
+      <p>{message}</p>
+      <div className="f-form-actions">
+        <Button onClick={onCopy}>Copy details</Button>
+        {onDisable ? (
+          <Button variant="danger" onClick={onDisable}>
+            Turn off this module
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** The frame around a capability's compact card (docs/DESIGN_SPEC.md 5.2). */
+export function ModuleCardFrame({
+  title,
+  onClose,
+  onExpand,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  onExpand?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section role="dialog" aria-label={title} className="f-card-frame">
+      <header>
+        <h2>{title}</h2>
+        <div>
+          {onExpand ? (
+            <Button variant="ghost" aria-label={`Open ${title} fullscreen`} onClick={onExpand}>
+              ⤢
+            </Button>
+          ) : null}
+          <Button variant="ghost" aria-label={`Close ${title}`} onClick={onClose}>
+            ×
+          </Button>
+        </div>
+      </header>
+      <div className="f-card-body">{children}</div>
+    </section>
   );
 }

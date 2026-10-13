@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "dev.frosty.companion",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm -w run build:capabilities && pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm -w run build:capabilities && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -28,9 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "nsis"
-    ],
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

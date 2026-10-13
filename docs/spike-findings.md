@@ -105,3 +105,9 @@ Not covered:
 - Only a one-view, one-capability case. Multiple capabilities, capability errors thrown during activation, and teardown on disable are Phase 2 work.
 - A real one-hour or overnight soak, and behaviour across sleep and wake.
 - The logic host window was created hidden; it was not first shown and then hidden.
+
+## Phase 2 follow-up: what the real build changed
+
+- The spike used an import map so capability code and the shell share React. The real build does not: capability bundles are built with `react` and `react/jsx-runtime` aliased to shims that read the shell's React from `globalThis.__frosty`. This works in dev and in release builds, needs no inline script, and so the production CSP has no `unsafe-inline`. The `unsafe-inline` in `devCsp` is only for Vite's dev client.
+- The hidden logic host is a third window created at startup and never shown, as in the spike. Activation, tool calls and event delivery all work through it (see `tools/smoke/phase2.ps1`).
+- Still open from the spike: a long idle soak and behaviour across sleep and wake.
