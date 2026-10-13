@@ -4,10 +4,11 @@
 //! module only stores and selects jobs; the app drives it with a timer and
 //! turns due jobs into events or tool calls.
 //!
-//! Missed jobs: a job whose time passed while Frosty was closed fires once at
-//! the next check and a recurring job then moves to its next future slot. The
-//! per-job policies (`skip`, `fire_all`) are stored now and honoured in
-//! Phase 3.
+//! Missed jobs: a job that is more than a minute late (Frosty was closed or
+//! the computer slept) follows its policy. `fire_once_on_start` fires once
+//! and a recurring job moves to its next future slot, `skip` drops the missed
+//! run silently, and `fire_all` replays the missed runs of a recurring job, up
+//! to a cap so a long absence cannot flood the screen.
 
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -166,6 +167,54 @@ pub fn after_fire(db: &Database, job: &Job, now_ms: i64) -> Result<(), DbError> 
     Ok(())
 }
 
+/// A job later than this was missed rather than merely waiting for the tick.
+pub const LATE_AFTER_MS: i64 = 60_000;
+/// Most runs a `fire_all` job replays after an absence.
+pub const FIRE_ALL_CAP: i64 = 10;
+
+/// One thing to run now, as decided by the job's missed-run policy.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Fire {
+    pub job: Job,
+    /// The run was missed and is being caught up.
+    pub late: bool,
+}
+
+/// Collects what is due, applies each job's policy, and advances or removes
+/// the jobs, so the caller only has to run the returned actions. Jobs whose
+/// owner is not ready (a capability still starting) are left untouched.
+pub fn take_due(
+    db: &Database,
+    now_ms: i64,
+    owner_ready: impl Fn(&str) -> bool,
+) -> Result<Vec<Fire>, DbError> {
+    let mut out = Vec::new();
+    for job in due(db, now_ms)? {
+        if !owner_ready(&job.owner) {
+            continue;
+        }
+        let behind = now_ms - job.fire_at;
+        let late = behind > LATE_AFTER_MS;
+        let runs = match (late, job.missed_policy) {
+            (false, _) => 1,
+            (true, MissedPolicy::Skip) => 0,
+            (true, MissedPolicy::FireOnceOnStart) => 1,
+            (true, MissedPolicy::FireAll) => match job.interval_ms {
+                Some(interval) => (behind / interval + 1).min(FIRE_ALL_CAP),
+                None => 1,
+            },
+        };
+        for _ in 0..runs {
+            out.push(Fire {
+                job: job.clone(),
+                late,
+            });
+        }
+        after_fire(db, &job, now_ms)?;
+    }
+    Ok(out)
+}
+
 pub fn count_for_owner(db: &Database, owner: &str) -> Result<i64, DbError> {
     Ok(db
         .connection()
@@ -258,5 +307,102 @@ mod tests {
         }
         let db = Database::open(&path, &backups).unwrap();
         assert_eq!(due(&db, 6_000).unwrap().len(), 1);
+    }
+
+    fn fires(db: &Database, now: i64) -> usize {
+        take_due(db, now, |_| true).unwrap().len()
+    }
+
+    #[test]
+    fn on_time_jobs_always_fire() {
+        for policy in [
+            MissedPolicy::FireOnceOnStart,
+            MissedPolicy::Skip,
+            MissedPolicy::FireAll,
+        ] {
+            let db = db();
+            schedule_at(&db, "a", 10_000, &json!({"event": "a.x"}), policy).unwrap();
+            assert_eq!(fires(&db, 10_500), 1);
+            assert_eq!(
+                fires(&db, 20_000),
+                0,
+                "a one-shot job is gone after it fires"
+            );
+        }
+    }
+
+    #[test]
+    fn a_missed_one_shot_follows_its_policy() {
+        let late = 10_000 + LATE_AFTER_MS + 1;
+        let db = db();
+        schedule_at(&db, "a", 10_000, &json!({}), MissedPolicy::FireOnceOnStart).unwrap();
+        let fired = take_due(&db, late, |_| true).unwrap();
+        assert_eq!(fired.len(), 1);
+        assert!(fired[0].late);
+
+        let db = db_with_skip();
+        assert_eq!(fires(&db, late), 0);
+        assert!(
+            due(&db, late).unwrap().is_empty(),
+            "a skipped one-shot is removed"
+        );
+    }
+
+    fn db_with_skip() -> Database {
+        let db = db();
+        schedule_at(&db, "a", 10_000, &json!({}), MissedPolicy::Skip).unwrap();
+        db
+    }
+
+    #[test]
+    fn a_missed_recurring_job_follows_its_policy() {
+        let interval = 10_000;
+        let now = 95_000 + LATE_AFTER_MS; // 15 runs behind
+        let make = |policy| {
+            let db = db();
+            schedule_every(
+                &db,
+                "g",
+                interval,
+                Some(0),
+                &json!({"event": "g.tick"}),
+                policy,
+            )
+            .unwrap();
+            db
+        };
+
+        let once = make(MissedPolicy::FireOnceOnStart);
+        assert_eq!(fires(&once, now), 1);
+
+        let skip = make(MissedPolicy::Skip);
+        assert_eq!(fires(&skip, now), 0);
+        // Skipping still moves the job to its next future slot.
+        assert!(due(&skip, now).unwrap().is_empty());
+        assert_eq!(due(&skip, now + interval).unwrap().len(), 1);
+
+        let all = make(MissedPolicy::FireAll);
+        assert_eq!(fires(&all, now) as i64, FIRE_ALL_CAP);
+    }
+
+    #[test]
+    fn jobs_of_a_capability_that_is_not_ready_wait() {
+        let db = db();
+        schedule_at(&db, "slow", 1_000, &json!({}), MissedPolicy::Skip).unwrap();
+        assert!(
+            take_due(&db, 2_000, |owner| owner != "slow")
+                .unwrap()
+                .is_empty()
+        );
+        // Still there, and fires once the owner is ready.
+        assert_eq!(take_due(&db, 2_000, |_| true).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn fire_all_replays_fewer_runs_when_few_were_missed() {
+        let db = db();
+        schedule_every(&db, "g", 30_000, Some(0), &json!({}), MissedPolicy::FireAll).unwrap();
+        // 100 s late with a 30 s interval: runs at 0, 30, 60, 90.
+        assert_eq!(fires(&db, 100_000), 4);
     }
 }

@@ -236,6 +236,22 @@ impl<'a> CapStore<'a> {
         self.get(table, id)
     }
 
+    /// Undo of `soft_delete`. Returns the row, or `None` if there was nothing
+    /// to restore.
+    pub fn restore(&self, table: &str, id: &str) -> Result<Option<Value>, StoreError> {
+        let (full, _) = self.table(table)?;
+        let changed = self.conn.execute(
+            &format!(
+                "UPDATE \"{full}\" SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2 AND deleted_at IS NOT NULL"
+            ),
+            rusqlite::params![now_millis(), id],
+        )?;
+        if changed == 0 {
+            return Ok(None);
+        }
+        self.get(table, id)
+    }
+
     /// Soft delete: the row stays, marked, so a later sync can see it.
     pub fn soft_delete(&self, table: &str, id: &str) -> Result<bool, StoreError> {
         let (full, _) = self.table(table)?;
@@ -398,6 +414,21 @@ mod tests {
             ..Default::default()
         };
         assert!(store.query("items", &bad_filter).is_err());
+    }
+
+    #[test]
+    fn restore_undoes_a_soft_delete() {
+        let db = setup();
+        let store = CapStore::new(db.connection(), "notes", "d");
+        let row = store.insert("items", &obj(json!({"title": "a"}))).unwrap();
+        let id = row["id"].as_str().unwrap();
+        store.soft_delete("items", id).unwrap();
+        assert!(store.get("items", id).unwrap().is_none());
+        let back = store.restore("items", id).unwrap().unwrap();
+        assert_eq!(back["title"], "a");
+        assert_eq!(back["deleted_at"], Value::Null);
+        // Restoring something that is not deleted does nothing.
+        assert!(store.restore("items", id).unwrap().is_none());
     }
 
     #[test]

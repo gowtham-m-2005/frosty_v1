@@ -1,5 +1,7 @@
 mod caps;
 mod commands;
+mod fullscreen;
+mod notify;
 mod shell;
 mod state;
 mod windows;
@@ -22,6 +24,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .register_uri_scheme_protocol("frosty-cap", |ctx, request| {
             caps::serve(ctx.app_handle(), request.uri().path())
         })
@@ -79,6 +82,12 @@ pub fn run() {
             caps::cap_notify,
             caps::cap_badge,
             caps::cap_log,
+            notify::list_notifications,
+            notify::notifications_mark_read,
+            notify::dismiss_notification,
+            notify::run_notification_action,
+            notify::get_dnd,
+            notify::set_dnd_manual,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

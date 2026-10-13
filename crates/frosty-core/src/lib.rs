@@ -7,6 +7,7 @@ pub mod config;
 pub mod db;
 pub mod events;
 pub mod home;
+pub mod notifications;
 pub mod personality;
 pub mod scheduler;
 pub mod theme;

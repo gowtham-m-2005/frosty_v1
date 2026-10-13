@@ -75,6 +75,16 @@ pub const CORE_MIGRATIONS: &[Migration] = &[
         );
     ",
     },
+    Migration {
+        version: "0003_notification_center",
+        sql: "
+        ALTER TABLE notifications ADD COLUMN actions TEXT;
+        ALTER TABLE notifications ADD COLUMN state TEXT NOT NULL DEFAULT 'held';
+        ALTER TABLE notifications ADD COLUMN hold_reason TEXT;
+        ALTER TABLE notifications ADD COLUMN delivered_at INTEGER;
+        CREATE INDEX notifications_state ON notifications (state, created_at);
+    ",
+    },
 ];
 
 /// Columns every capability table must carry so its rows can sync later

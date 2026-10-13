@@ -27,7 +27,7 @@ use tauri_plugin_autostart::ManagerExt as _;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
 
 use crate::{
-    caps,
+    caps, notify,
     state::{AppState, Hotkeys, Notice},
     windows::{self, MAIN, OVERLAY},
 };
@@ -153,6 +153,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let device_id = db.device_id(&config.current().core.device_name)?;
     let builtin_root = caps::find_builtin_root(app.handle());
     let registry = caps::initial_registry(builtin_root.as_deref(), &home.capabilities_dir());
+    let dnd_manual = db.kv_get("dnd.manual").ok().flatten().as_deref() == Some("1");
     let engine = build_engine(config.current(), &home);
     let themes = load_themes(&home);
 
@@ -173,6 +174,10 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         badges: Mutex::new(std::collections::HashMap::new()),
         builtin_root,
         device_id,
+        fullscreen_app: std::sync::atomic::AtomicBool::new(false),
+        dnd_manual: std::sync::atomic::AtomicBool::new(dnd_manual),
+        rate: Mutex::new(frosty_core::notifications::RateLimiter::default()),
+        tray_dnd: Mutex::new(None),
     });
 
     let handle = app.handle().clone();
@@ -184,6 +189,8 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     caps::apply_enabled_list(&handle);
     caps::emit_capabilities(&handle);
     caps::spawn_scheduler(handle.clone());
+    notify::spawn_fullscreen_watcher(handle.clone());
+    spawn_smoke_calls(&handle);
     if let Some(message) = startup_notice {
         set_notices(&handle, "startup", vec![message]);
     }
@@ -455,9 +462,31 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         MenuItem::with_id(app, "fullscreen", "Open fullscreen", true, None::<&str>)?;
     let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let dnd_on = app
+        .state::<AppState>()
+        .dnd_manual
+        .load(std::sync::atomic::Ordering::SeqCst);
+    let dnd_item = MenuItem::with_id(
+        app,
+        "dnd",
+        if dnd_on {
+            "Do not disturb: on"
+        } else {
+            "Do not disturb: off"
+        },
+        true,
+        None::<&str>,
+    )?;
+    *app.state::<AppState>().tray_dnd.lock().unwrap() = Some(dnd_item.clone());
     let menu = Menu::with_items(
         app,
-        &[&summon_item, &fullscreen_item, &settings_item, &quit_item],
+        &[
+            &summon_item,
+            &fullscreen_item,
+            &dnd_item,
+            &settings_item,
+            &quit_item,
+        ],
     )?;
 
     let mut builder = TrayIconBuilder::with_id("frosty")
@@ -468,6 +497,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             "summon" => summon(app),
             "fullscreen" => open_main(app, None),
             "settings" => open_main(app, Some("settings")),
+            "dnd" => {
+                let on = !app
+                    .state::<AppState>()
+                    .dnd_manual
+                    .load(std::sync::atomic::Ordering::SeqCst);
+                notify::set_dnd(app, on);
+            }
             "quit" => {
                 publish(app, "core.quit", json!({}), None);
                 app.exit(0);
@@ -489,4 +525,73 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     }
     builder.build(app)?;
     Ok(())
+}
+
+/// Debug builds only: `FROSTY_SMOKE_CALLS` names a JSON file of tool calls to
+/// run once the capabilities are up, with results in `logs/smoke.log`. It lets
+/// a script drive the real app end to end without clicking.
+///
+///   [{"tool": "tasks.add", "input": {"title": "x"}}, {"wait_ms": 2000}]
+fn spawn_smoke_calls(app: &AppHandle) {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+    let Some(path) = std::env::var_os("FROSTY_SMOKE_CALLS") else {
+        return;
+    };
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        use std::io::Write;
+        let state = app.state::<AppState>();
+        let log_path = state.home.logs_dir().join("smoke.log");
+        let log = |line: String| {
+            let _ = fs::create_dir_all(state.home.logs_dir());
+            if let Ok(mut f) = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+            {
+                let _ = writeln!(f, "{line}");
+            }
+        };
+        let Ok(text) = fs::read_to_string(&path) else {
+            log("cannot read the smoke calls file".into());
+            return;
+        };
+        let Ok(calls) = serde_json::from_str::<Vec<serde_json::Value>>(&text) else {
+            log("the smoke calls file is not a JSON list".into());
+            return;
+        };
+
+        // Wait for every enabled capability to finish starting.
+        for _ in 0..60 {
+            let starting = state
+                .registry
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|e| e.state == frosty_host::registry::State::Enabling);
+            if !starting {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        log("ready".into());
+
+        for call in calls {
+            if let Some(ms) = call.get("wait_ms").and_then(|v| v.as_u64()) {
+                tokio::time::sleep(Duration::from_millis(ms)).await;
+                continue;
+            }
+            let Some(tool) = call.get("tool").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let input = call.get("input").cloned().unwrap_or_else(|| json!({}));
+            match caps::dispatch_tool(&app, None, tool, input).await {
+                Ok(v) => log(format!("ok {tool} {v}")),
+                Err(e) => log(format!("err {tool} {e}")),
+            }
+        }
+        log("done".into());
+    });
 }

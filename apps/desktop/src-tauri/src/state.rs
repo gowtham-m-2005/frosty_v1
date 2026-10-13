@@ -1,13 +1,16 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex, atomic::AtomicU64},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64},
+    },
     time::Instant,
 };
 
 use frosty_core::{
     config::ConfigStore, db::Database, events::EventBus, home::FrostyHome,
-    personality::PersonalityEngine, theme::Theme,
+    notifications::RateLimiter, personality::PersonalityEngine, theme::Theme,
 };
 use frosty_host::registry::Registry;
 use serde::Serialize;
@@ -49,6 +52,13 @@ pub struct AppState {
     pub badges: Mutex<HashMap<String, i64>>,
     pub builtin_root: Option<PathBuf>,
     pub device_id: String,
+    /// A fullscreen app is in front (reminders wait).
+    pub fullscreen_app: AtomicBool,
+    /// Do not disturb switched on by hand, from the tray or settings.
+    pub dnd_manual: AtomicBool,
+    pub rate: Mutex<RateLimiter>,
+    /// The tray's do-not-disturb entry, kept so its text can follow the state.
+    pub tray_dnd: Mutex<Option<tauri::menu::MenuItem<tauri::Wry>>>,
 }
 
 impl AppState {

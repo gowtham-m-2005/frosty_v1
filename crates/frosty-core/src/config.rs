@@ -178,19 +178,28 @@ impl Default for PersonalitySection {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NotificationsSection {
+    /// Whether the nightly do-not-disturb window applies at all.
+    pub dnd_schedule_enabled: bool,
     pub dnd_start: String,
     pub dnd_end: String,
     pub os_fallback: bool,
     pub fullscreen_behavior: String,
+    /// Capability ids whose notifications are dropped.
+    pub muted: Vec<String>,
+    /// How long a nudge stays on screen before it moves to history.
+    pub chip_seconds: u32,
 }
 
 impl Default for NotificationsSection {
     fn default() -> Self {
         Self {
+            dnd_schedule_enabled: true,
             dnd_start: "23:00".into(),
             dnd_end: "07:00".into(),
             os_fallback: true,
             fullscreen_behavior: "wait".into(),
+            muted: Vec::new(),
+            chip_seconds: 20,
         }
     }
 }
@@ -244,10 +253,13 @@ locale = "en"
 never_react = []         # event patterns, for example ["notes.*"]
 
 [notifications]
+dnd_schedule_enabled = true
 dnd_start = "23:00"
 dnd_end = "07:00"
 os_fallback = true
 fullscreen_behavior = "wait"
+muted = []               # capability ids to silence
+chip_seconds = 20        # how long a reminder stays on screen
 
 [capabilities]
 enabled = []

@@ -136,6 +136,30 @@ pub struct ToolInfo {
     pub title: String,
     pub quick_action: bool,
     pub quick_action_control: Option<String>,
+    /// The input property a one-line quick action fills, from the tool's
+    /// input schema: its first required property, else its first property.
+    pub primary_field: Option<String>,
+    pub primary_min: Option<f64>,
+    pub primary_max: Option<f64>,
+}
+
+fn primary_field(schema: Option<&Value>) -> (Option<String>, Option<f64>, Option<f64>) {
+    let Some(schema) = schema else {
+        return (None, None, None);
+    };
+    let props = schema.get("properties").and_then(Value::as_object);
+    let required = schema
+        .get("required")
+        .and_then(Value::as_array)
+        .and_then(|r| r.first())
+        .and_then(Value::as_str);
+    let name = required.or_else(|| props.and_then(|p| p.keys().next().map(String::as_str)));
+    let Some(name) = name else {
+        return (None, None, None);
+    };
+    let prop = props.and_then(|p| p.get(name));
+    let num = |k: &str| prop.and_then(|p| p.get(k)).and_then(Value::as_f64);
+    (Some(name.to_string()), num("minimum"), num("maximum"))
 }
 
 #[derive(Serialize, Clone)]
@@ -200,11 +224,22 @@ pub fn build_list(state: &AppState) -> CapabilityList {
                 tools: m
                     .tools
                     .iter()
-                    .map(|t| ToolInfo {
-                        id: t.id.clone(),
-                        title: t.title.clone(),
-                        quick_action: t.quick_action,
-                        quick_action_control: t.quick_action_control.clone(),
+                    .map(|t| {
+                        let schema = e
+                            .loaded
+                            .tool_schemas
+                            .get(&t.id)
+                            .and_then(|s| s.input.as_ref());
+                        let (primary_field, primary_min, primary_max) = primary_field(schema);
+                        ToolInfo {
+                            id: t.id.clone(),
+                            title: t.title.clone(),
+                            quick_action: t.quick_action,
+                            quick_action_control: t.quick_action_control.clone(),
+                            primary_field,
+                            primary_min,
+                            primary_max,
+                        }
                     })
                     .collect(),
                 permissions: perms::describe(&m.permissions),
@@ -785,6 +820,7 @@ pub fn cap_db(
         "soft_delete" => store
             .soft_delete(&table, id)
             .map(|done| Some(Value::Bool(done))),
+        "restore" => store.restore(&table, id),
         "query" => store
             .query(
                 &table,
@@ -928,37 +964,34 @@ pub fn cap_notify(
     capability: String,
     title: String,
     body: Option<String>,
+    actions: Option<Value>,
 ) -> CmdResult<()> {
     require(&state, &capability, |p| p.notifications, "notifications")?;
-    {
-        let db = state.db.lock().unwrap();
-        db.connection()
-            .execute(
-                "INSERT INTO notifications (id, owner, title, body, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-                rusqlite_params(&capability, &title, body.as_deref().unwrap_or("")),
-            )
-            .map_err(|e| e.to_string())?;
+    let actions = actions.unwrap_or_else(|| json!([]));
+    // An action may only run this capability's own tools, or ones it was
+    // granted, exactly as if it had called them itself.
+    if let Some(list) = actions.as_array() {
+        let grants = granted(&state, &capability);
+        for action in list {
+            let tool = action
+                .get("tool")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if !perms::may_call_tool(&grants, &capability, tool) {
+                return Err(format!(
+                    "`{capability}` may not use `{tool}` in a notification"
+                ));
+            }
+        }
     }
-    shell::publish(
+    crate::notify::submit(
         &app,
-        "core.notification",
-        json!({ "text": title, "capability": capability }),
-        None,
-    );
-    Ok(())
-}
-
-fn rusqlite_params(owner: &str, title: &str, body: &str) -> impl rusqlite::Params {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_millis() as i64);
-    (
-        uuid::Uuid::now_v7().to_string(),
-        owner.to_string(),
-        title.to_string(),
-        body.to_string(),
-        now,
+        &capability,
+        &title,
+        body.as_deref().unwrap_or(""),
+        &actions,
     )
+    .map(|_| ())
 }
 
 #[tauri::command]
@@ -1019,25 +1052,34 @@ fn persist_states(state: &AppState) {
 
 // ---------------------------------------------------------------- scheduler
 
-/// Checks the job table once a second and turns due jobs into events or
-/// tool calls. Jobs of a capability that is not running are left in place.
+/// Checks the job table once a second and turns due jobs into events or tool
+/// calls, following each job's missed-run policy. Jobs of a capability that is
+/// not running yet are left alone. Every few seconds it also gives held
+/// notifications another chance, so do-not-disturb ends on time.
 pub fn spawn_scheduler(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
+        let mut tick: u64 = 0;
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
+            tick += 1;
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_millis() as i64);
             let state = app.state::<AppState>();
-            let jobs = match scheduler::due(&state.db.lock().unwrap(), now) {
-                Ok(j) => j,
-                Err(_) => continue,
+
+            let running: Vec<String> = {
+                let reg = state.registry.lock().unwrap();
+                reg.iter()
+                    .filter(|e| e.state == CapState::Enabled)
+                    .map(|e| e.loaded.id().to_string())
+                    .collect()
             };
-            for job in jobs {
-                if state.registry.lock().unwrap().state(&job.owner) != Some(CapState::Enabled) {
-                    continue;
-                }
-                let _ = scheduler::after_fire(&state.db.lock().unwrap(), &job, now);
+            let fires = {
+                let db = state.db.lock().unwrap();
+                scheduler::take_due(&db, now, |owner| running.iter().any(|r| r == owner))
+            };
+            for fire in fires.unwrap_or_default() {
+                let job = fire.job;
                 if let Some(event) = job.action.get("event").and_then(Value::as_str) {
                     let payload = job
                         .action
@@ -1046,19 +1088,34 @@ pub fn spawn_scheduler(app: AppHandle) {
                         .unwrap_or_else(|| json!({}));
                     shell::publish(&app, event, payload, None);
                 } else if let Some(tool) = job.action.get("tool").and_then(Value::as_str) {
-                    let input = job
+                    let mut input = job
                         .action
                         .get("input")
                         .cloned()
                         .unwrap_or_else(|| json!({}));
+                    if fire.late
+                        && let Some(map) = input.as_object_mut()
+                    {
+                        map.insert("late".into(), json!(true));
+                    }
                     let app = app.clone();
                     let (owner, tool) = (job.owner.clone(), tool.to_string());
                     tauri::async_runtime::spawn(async move {
                         if let Err(e) = dispatch_tool(&app, Some(&owner), &tool, input).await {
-                            eprintln!("scheduled call to {tool} failed: {e}");
+                            let state = app.state::<AppState>();
+                            log_line(
+                                &state,
+                                "error",
+                                &owner,
+                                &format!("scheduled {tool} failed: {e}"),
+                            );
                         }
                     });
                 }
+            }
+
+            if tick.is_multiple_of(5) {
+                crate::notify::deliver_pending(&app);
             }
         }
     });
