@@ -10,6 +10,26 @@ How to use it: work top to bottom. Each milestone has a task list and an exit ch
 
 ---
 
+## Progress
+
+Updated 2026-10-14. "Built" means code exists and automated checks pass. "Verified" means it was run on the dev machine (Windows 11, 175 percent scaling).
+
+| Milestone | State | Notes |
+|-----------|-------|-------|
+| M0.1 Repo and tooling | Done, except CI never ran | Needs a push to GitHub to prove `ci.yml`. |
+| M0.2 Spike A (overlay) | Mostly done | Region click-through verified, 0.0 to 0.3 percent CPU. Fullscreen detection needs a different approach (see docs/spike-findings.md). Real game, other DPI levels, second monitor, focus: not tested. |
+| M0.3 Spike B (character) | Not started | Placeholder fox is CSS and SVG. Rive versus sprites is still open (decision 1). |
+| M0.4 Spike C (summon latency) | Not started | Needs timestamps from hotkey to first painted frame. |
+| M0.5 Spike D (capability loading) | Not started | Required before Phase 2. |
+| M1.1 Core crate foundations | Built | Config, events, database, home. 42 unit tests. Rotating log files are not written yet. |
+| M1.2 Windows, tray, hotkeys | Built, partly verified | App launches and survives a broken config. Hotkeys, tray menu, drag, snap, and multi-monitor placement not yet exercised by hand. Position memory is one global position, not per monitor. |
+| M1.3 Character package | Built (placeholder) | All states exist as CSS animation. No Rive, no skin loader, no skin contract validation. |
+| M1.4 Personality engine | Done | Cooldowns, levels, tone, packs, overrides, tests. |
+| M1.5 Themes | Built | Frost and Cartridge, AA check in tests. Mode fallback is shown. Only two themes; accent override and theme editor are Phase 5. |
+| M1.6 Shell UI | Built, not verified by hand | Overlay, dock, chip, fullscreen shell, settings, debug panel. No component tests beyond theme mapping. Keyboard arrow navigation in the dock and the hotkey recorder are missing. |
+
+Phase 1 exit check is not met yet: it needs the hand tests listed in section 6.
+
 ## 1. Scope
 
 | Track | Phases | Target |
