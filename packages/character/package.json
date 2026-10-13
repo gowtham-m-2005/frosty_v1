@@ -1,0 +1,13 @@
+{
+  "name": "@frosty/character",
+  "description": "Character renderer and skin contract",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

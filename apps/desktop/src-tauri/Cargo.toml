@@ -1,0 +1,25 @@
+[package]
+name = "frosty-companion"
+description = "Frosty, a personal digital companion"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+# The `_lib` suffix keeps the lib name from clashing with the bin name on
+# Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "frosty_companion_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+frosty-core.workspace = true
+frosty-host.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+
+[lints]
+workspace = true

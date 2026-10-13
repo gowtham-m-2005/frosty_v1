@@ -1,0 +1,9 @@
+[package]
+name = "frosty-core"
+description = "Frosty Core services: config, storage, events, scheduler, personality"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
